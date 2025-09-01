@@ -54,3 +54,10 @@ type Scheduler interface {
 	CancelScheduledTask(ctx context.Context, taskID string) error
 	GetNextOccurrence(ctx context.Context, taskID string) (time.Time, error)
 }
+
+type IdempotencyRepository interface {
+	Create(ctx context.Context, key *entity.IdempotencyKey) error
+	FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error)
+	Update(ctx context.Context, key *entity.IdempotencyKey) error
+	DeleteExpired(ctx context.Context) error
+}

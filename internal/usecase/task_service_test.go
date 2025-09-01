@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
+	"github.com/supercakecrumb/adhd-game-bot/internal/ports"
 	"github.com/supercakecrumb/adhd-game-bot/internal/usecase"
 )
 
@@ -99,6 +100,42 @@ func (m *mockScheduler) GetNextOccurrence(ctx context.Context, taskID string) (t
 	return args.Get(0).(time.Time), args.Error(1)
 }
 
+type mockIdempotencyRepo struct {
+	mock.Mock
+}
+
+func (m *mockIdempotencyRepo) Create(ctx context.Context, key *entity.IdempotencyKey) error {
+	args := m.Called(ctx, key)
+	return args.Error(0)
+}
+
+func (m *mockIdempotencyRepo) FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error) {
+	args := m.Called(ctx, key)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entity.IdempotencyKey), args.Error(1)
+}
+
+func (m *mockIdempotencyRepo) Update(ctx context.Context, key *entity.IdempotencyKey) error {
+	args := m.Called(ctx, key)
+	return args.Error(0)
+}
+
+func (m *mockIdempotencyRepo) DeleteExpired(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+type mockTxManager struct {
+	mock.Mock
+}
+
+func (m *mockTxManager) WithTx(ctx context.Context, fn func(context.Context) error) error {
+	args := m.Called(ctx, fn)
+	return args.Error(0)
+}
+
 func (m *mockUUIDGen) New() string {
 	return "generated-uuid"
 }
@@ -108,9 +145,11 @@ func TestTaskService(t *testing.T) {
 	taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
 	userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
 	uuidGen := &mockUUIDGen{}
-
 	mockScheduler := new(mockScheduler)
-	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler)
+	mockIdempotencyRepo := new(mockIdempotencyRepo)
+	mockTxManager := new(mockTxManager)
+
+	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 
 	t.Run("CreateTask", func(t *testing.T) {
 		task := &entity.Task{
@@ -128,6 +167,8 @@ func TestTaskService(t *testing.T) {
 		require.Equal(t, "Test Task", created.Title)
 
 		mockScheduler.AssertExpectations(t)
+		mockIdempotencyRepo.AssertExpectations(t)
+		mockTxManager.AssertExpectations(t)
 	})
 
 	t.Run("CompleteTask", func(t *testing.T) {
@@ -139,8 +180,18 @@ func TestTaskService(t *testing.T) {
 		}
 		taskRepo.tasks[task.ID] = task
 
-		// Mock the scheduler call for daily tasks
-		mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Task")).Return(nil).Once()
+		// Mock idempotency check
+		mockIdempotencyRepo.On("FindByKey", ctx, mock.AnythingOfType("string")).Return(nil, ports.ErrIdempotencyKeyNotFound).Once()
+		mockIdempotencyRepo.On("Create", ctx, mock.AnythingOfType("*entity.IdempotencyKey")).Return(nil).Once()
+		mockIdempotencyRepo.On("Update", ctx, mock.AnythingOfType("*entity.IdempotencyKey")).Return(nil).Once()
+
+		// Mock transaction
+		mockTxManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Run(func(args mock.Arguments) {
+			fn := args.Get(1).(func(context.Context) error)
+			// Mock the scheduler call for daily tasks
+			mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Task")).Return(nil).Once()
+			fn(ctx)
+		}).Return(nil).Once()
 
 		err := service.CompleteTask(ctx, 1, "task-1")
 		require.NoError(t, err)
