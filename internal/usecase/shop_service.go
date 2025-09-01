@@ -15,6 +15,7 @@ type ShopService struct {
 	userRepo       ports.UserRepository
 	chatConfigRepo ports.ChatConfigRepository
 	uuidGen        ports.UUIDGenerator
+	txManager      ports.TxManager
 }
 
 func NewShopService(
@@ -23,6 +24,7 @@ func NewShopService(
 	userRepo ports.UserRepository,
 	chatConfigRepo ports.ChatConfigRepository,
 	uuidGen ports.UUIDGenerator,
+	txManager ports.TxManager,
 ) *ShopService {
 	return &ShopService{
 		shopItemRepo:   shopItemRepo,
@@ -30,6 +32,7 @@ func NewShopService(
 		userRepo:       userRepo,
 		chatConfigRepo: chatConfigRepo,
 		uuidGen:        uuidGen,
+		txManager:      txManager,
 	}
 }
 
@@ -65,82 +68,82 @@ func (s *ShopService) GetShopItems(ctx context.Context, chatID int64) ([]*entity
 
 // PurchaseItem handles a user purchasing an item from the shop
 func (s *ShopService) PurchaseItem(ctx context.Context, userID int64, itemCode string, quantity int) (*entity.Purchase, error) {
-	// Get user
-	user, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
+	var purchase *entity.Purchase
 
-	// Get item
-	item, err := s.shopItemRepo.FindByCode(ctx, user.ChatID, itemCode)
-	if err != nil {
-		// Try global items
-		item, err = s.shopItemRepo.FindByCode(ctx, 0, itemCode)
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
+		// Get user
+		user, err := s.userRepo.FindByID(txCtx, userID)
 		if err != nil {
-			return nil, fmt.Errorf("item not found: %w", err)
+			return fmt.Errorf("user not found: %w", err)
 		}
-	}
 
-	// Check if item is active
-	if !item.IsActive {
-		return nil, fmt.Errorf("item is not available")
-	}
-
-	// Check stock
-	if item.Stock != nil && *item.Stock < quantity {
-		return nil, fmt.Errorf("insufficient stock")
-	}
-
-	// Calculate total cost
-	totalCost := item.Price.Mul(valueobject.NewDecimal(fmt.Sprintf("%d", quantity)))
-
-	// Check user balance
-	if user.Balance.Cmp(totalCost) < 0 {
-		return nil, fmt.Errorf("insufficient balance")
-	}
-
-	// Create purchase record
-	purchase := &entity.Purchase{
-		UserID:    userID,
-		ItemID:    item.ID,
-		ItemName:  item.Name,
-		ItemPrice: item.Price,
-		Quantity:  quantity,
-		TotalCost: totalCost,
-		Status:    "completed",
-	}
-
-	// In a real implementation, this would be done in a transaction
-	// 1. Deduct user balance
-	negativeAmount := totalCost.Mul(valueobject.NewDecimal("-1"))
-	err = s.userRepo.UpdateBalance(ctx, userID, negativeAmount)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update balance: %w", err)
-	}
-
-	// 2. Update stock if limited
-	if item.Stock != nil {
-		newStock := *item.Stock - quantity
-		item.Stock = &newStock
-		err = s.shopItemRepo.Update(ctx, item)
+		// Get item
+		item, err := s.shopItemRepo.FindByCode(txCtx, user.ChatID, itemCode)
 		if err != nil {
-			// Rollback balance update
-			s.userRepo.UpdateBalance(ctx, userID, totalCost)
-			return nil, fmt.Errorf("failed to update stock: %w", err)
+			// Try global items
+			item, err = s.shopItemRepo.FindByCode(txCtx, 0, itemCode)
+			if err != nil {
+				return fmt.Errorf("item not found: %w", err)
+			}
 		}
-	}
 
-	// 3. Create purchase record
-	err = s.purchaseRepo.Create(ctx, purchase)
-	if err != nil {
-		// Rollback previous changes
-		s.userRepo.UpdateBalance(ctx, userID, totalCost)
+		// Check if item is active
+		if !item.IsActive {
+			return fmt.Errorf("item is not available")
+		}
+
+		// Check stock
+		if item.Stock != nil && *item.Stock < quantity {
+			return fmt.Errorf("insufficient stock")
+		}
+
+		// Calculate total cost
+		totalCost := item.Price.Mul(valueobject.NewDecimal(fmt.Sprintf("%d", quantity)))
+
+		// Check user balance
+		if user.Balance.Cmp(totalCost) < 0 {
+			return fmt.Errorf("insufficient balance")
+		}
+
+		// Create purchase record
+		purchase = &entity.Purchase{
+			UserID:    userID,
+			ItemID:    item.ID,
+			ItemName:  item.Name,
+			ItemPrice: item.Price,
+			Quantity:  quantity,
+			TotalCost: totalCost,
+			Status:    "completed",
+		}
+
+		// 1. Deduct user balance
+		negativeAmount := totalCost.Mul(valueobject.NewDecimal("-1"))
+		err = s.userRepo.UpdateBalance(txCtx, userID, negativeAmount)
+		if err != nil {
+			return fmt.Errorf("failed to update balance: %w", err)
+		}
+
+		// 2. Update stock if limited
 		if item.Stock != nil {
-			newStock := *item.Stock + quantity
+			newStock := *item.Stock - quantity
 			item.Stock = &newStock
-			s.shopItemRepo.Update(ctx, item)
+			err = s.shopItemRepo.Update(txCtx, item)
+			if err != nil {
+				return fmt.Errorf("failed to update stock: %w", err)
+			}
 		}
-		return nil, fmt.Errorf("failed to create purchase: %w", err)
+
+		// 3. Create purchase record
+		err = s.purchaseRepo.Create(txCtx, purchase)
+		if err != nil {
+			return fmt.Errorf("failed to create purchase: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return purchase, nil

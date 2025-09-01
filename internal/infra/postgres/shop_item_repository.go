@@ -20,14 +20,24 @@ func NewShopItemRepository(db *sql.DB) *ShopItemRepository {
 }
 
 func (r *ShopItemRepository) Create(ctx context.Context, item *entity.ShopItem) error {
-	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO shop_items (chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id`,
-		item.ChatID, item.Code, item.Name, item.Description, item.Price.String(),
-		item.Category, item.IsActive, item.Stock, item.CreatedAt, item.UpdatedAt).Scan(&item.ID)
+	var row *sql.Row
+	if tx, ok := GetTx(ctx); ok {
+		row = tx.QueryRowContext(ctx, `
+			INSERT INTO shop_items (chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			RETURNING id`,
+			item.ChatID, item.Code, item.Name, item.Description, item.Price.String(),
+			item.Category, item.IsActive, item.Stock, item.CreatedAt, item.UpdatedAt)
+	} else {
+		row = r.db.QueryRowContext(ctx, `
+			INSERT INTO shop_items (chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			RETURNING id`,
+			item.ChatID, item.Code, item.Name, item.Description, item.Price.String(),
+			item.Category, item.IsActive, item.Stock, item.CreatedAt, item.UpdatedAt)
+	}
 
-	if err != nil {
+	if err := row.Scan(&item.ID); err != nil {
 		return fmt.Errorf("failed to create shop item: %w", err)
 	}
 
@@ -38,10 +48,18 @@ func (r *ShopItemRepository) FindByID(ctx context.Context, id int64) (*entity.Sh
 	var item entity.ShopItem
 	var priceStr string
 
-	err := r.db.QueryRowContext(ctx, `
-		SELECT id, chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at
-		FROM shop_items WHERE id = $1`, id).Scan(
-		&item.ID, &item.ChatID, &item.Code, &item.Name, &item.Description,
+	var row *sql.Row
+	if tx, ok := GetTx(ctx); ok {
+		row = tx.QueryRowContext(ctx, `
+			SELECT id, chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at
+			FROM shop_items WHERE id = $1`, id)
+	} else {
+		row = r.db.QueryRowContext(ctx, `
+			SELECT id, chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at
+			FROM shop_items WHERE id = $1`, id)
+	}
+
+	err := row.Scan(&item.ID, &item.ChatID, &item.Code, &item.Name, &item.Description,
 		&priceStr, &item.Category, &item.IsActive, &item.Stock, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
@@ -61,10 +79,18 @@ func (r *ShopItemRepository) FindByCode(ctx context.Context, chatID int64, code 
 	var item entity.ShopItem
 	var priceStr string
 
-	err := r.db.QueryRowContext(ctx, `
-		SELECT id, chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at
-		FROM shop_items WHERE chat_id = $1 AND code = $2`, chatID, code).Scan(
-		&item.ID, &item.ChatID, &item.Code, &item.Name, &item.Description,
+	var row *sql.Row
+	if tx, ok := GetTx(ctx); ok {
+		row = tx.QueryRowContext(ctx, `
+			SELECT id, chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at
+			FROM shop_items WHERE chat_id = $1 AND code = $2`, chatID, code)
+	} else {
+		row = r.db.QueryRowContext(ctx, `
+			SELECT id, chat_id, code, name, description, price, category, is_active, stock, created_at, updated_at
+			FROM shop_items WHERE chat_id = $1 AND code = $2`, chatID, code)
+	}
+
+	err := row.Scan(&item.ID, &item.ChatID, &item.Code, &item.Name, &item.Description,
 		&priceStr, &item.Category, &item.IsActive, &item.Stock, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
@@ -119,12 +145,23 @@ func (r *ShopItemRepository) FindByChatID(ctx context.Context, chatID int64) ([]
 func (r *ShopItemRepository) Update(ctx context.Context, item *entity.ShopItem) error {
 	item.UpdatedAt = time.Now()
 
-	result, err := r.db.ExecContext(ctx, `
-		UPDATE shop_items
-		SET code = $2, name = $3, description = $4, price = $5, category = $6, is_active = $7, stock = $8, updated_at = $9
-		WHERE id = $1`,
-		item.ID, item.Code, item.Name, item.Description, item.Price.String(),
-		item.Category, item.IsActive, item.Stock, item.UpdatedAt)
+	var result sql.Result
+	var err error
+	if tx, ok := GetTx(ctx); ok {
+		result, err = tx.ExecContext(ctx, `
+			UPDATE shop_items
+			SET code = $2, name = $3, description = $4, price = $5, category = $6, is_active = $7, stock = $8, updated_at = $9
+			WHERE id = $1`,
+			item.ID, item.Code, item.Name, item.Description, item.Price.String(),
+			item.Category, item.IsActive, item.Stock, item.UpdatedAt)
+	} else {
+		result, err = r.db.ExecContext(ctx, `
+			UPDATE shop_items
+			SET code = $2, name = $3, description = $4, price = $5, category = $6, is_active = $7, stock = $8, updated_at = $9
+			WHERE id = $1`,
+			item.ID, item.Code, item.Name, item.Description, item.Price.String(),
+			item.Category, item.IsActive, item.Stock, item.UpdatedAt)
+	}
 
 	if err != nil {
 		return fmt.Errorf("failed to update shop item: %w", err)

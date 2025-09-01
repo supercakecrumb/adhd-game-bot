@@ -19,14 +19,24 @@ func NewPurchaseRepository(db *sql.DB) *PurchaseRepository {
 }
 
 func (r *PurchaseRepository) Create(ctx context.Context, purchase *entity.Purchase) error {
-	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO purchases (user_id, item_id, item_name, item_price, quantity, total_cost, status, purchased_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id`,
-		purchase.UserID, purchase.ItemID, purchase.ItemName, purchase.ItemPrice.String(),
-		purchase.Quantity, purchase.TotalCost.String(), purchase.Status, purchase.PurchasedAt).Scan(&purchase.ID)
+	var row *sql.Row
+	if tx, ok := GetTx(ctx); ok {
+		row = tx.QueryRowContext(ctx, `
+			INSERT INTO purchases (user_id, item_id, item_name, item_price, quantity, total_cost, status, purchased_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING id`,
+			purchase.UserID, purchase.ItemID, purchase.ItemName, purchase.ItemPrice.String(),
+			purchase.Quantity, purchase.TotalCost.String(), purchase.Status, purchase.PurchasedAt)
+	} else {
+		row = r.db.QueryRowContext(ctx, `
+			INSERT INTO purchases (user_id, item_id, item_name, item_price, quantity, total_cost, status, purchased_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING id`,
+			purchase.UserID, purchase.ItemID, purchase.ItemName, purchase.ItemPrice.String(),
+			purchase.Quantity, purchase.TotalCost.String(), purchase.Status, purchase.PurchasedAt)
+	}
 
-	if err != nil {
+	if err := row.Scan(&purchase.ID); err != nil {
 		return fmt.Errorf("failed to create purchase: %w", err)
 	}
 
@@ -37,10 +47,18 @@ func (r *PurchaseRepository) FindByID(ctx context.Context, id int64) (*entity.Pu
 	var purchase entity.Purchase
 	var itemPriceStr, totalCostStr string
 
-	err := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, item_id, item_name, item_price, quantity, total_cost, status, purchased_at
-		FROM purchases WHERE id = $1`, id).Scan(
-		&purchase.ID, &purchase.UserID, &purchase.ItemID, &purchase.ItemName,
+	var row *sql.Row
+	if tx, ok := GetTx(ctx); ok {
+		row = tx.QueryRowContext(ctx, `
+			SELECT id, user_id, item_id, item_name, item_price, quantity, total_cost, status, purchased_at
+			FROM purchases WHERE id = $1`, id)
+	} else {
+		row = r.db.QueryRowContext(ctx, `
+			SELECT id, user_id, item_id, item_name, item_price, quantity, total_cost, status, purchased_at
+			FROM purchases WHERE id = $1`, id)
+	}
+
+	err := row.Scan(&purchase.ID, &purchase.UserID, &purchase.ItemID, &purchase.ItemName,
 		&itemPriceStr, &purchase.Quantity, &totalCostStr, &purchase.Status, &purchase.PurchasedAt)
 
 	if err != nil {

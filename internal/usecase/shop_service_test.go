@@ -148,6 +148,19 @@ func (m *MockUUIDGenerator) New() string {
 	return args.String(0)
 }
 
+type MockTxManager struct {
+	mock.Mock
+}
+
+func (m *MockTxManager) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	args := m.Called(ctx, fn)
+	// Execute the function directly (no actual transaction)
+	if args.Get(0) == nil {
+		return fn(ctx)
+	}
+	return args.Error(0)
+}
+
 func TestShopService_SetCurrencyName(t *testing.T) {
 	ctx := context.Background()
 
@@ -156,8 +169,9 @@ func TestShopService_SetCurrencyName(t *testing.T) {
 	shopItemRepo := new(MockShopItemRepository)
 	purchaseRepo := new(MockPurchaseRepository)
 	uuidGen := new(MockUUIDGenerator)
+	txManager := new(MockTxManager)
 
-	service := usecase.NewShopService(shopItemRepo, purchaseRepo, userRepo, chatConfigRepo, uuidGen)
+	service := usecase.NewShopService(shopItemRepo, purchaseRepo, userRepo, chatConfigRepo, uuidGen, txManager)
 
 	t.Run("Create new config", func(t *testing.T) {
 		chatConfigRepo.On("FindByChatID", ctx, int64(100)).Return(nil, ports.ErrChatConfigNotFound).Once()
@@ -195,8 +209,9 @@ func TestShopService_PurchaseItem(t *testing.T) {
 	shopItemRepo := new(MockShopItemRepository)
 	purchaseRepo := new(MockPurchaseRepository)
 	uuidGen := new(MockUUIDGenerator)
+	txManager := new(MockTxManager)
 
-	service := usecase.NewShopService(shopItemRepo, purchaseRepo, userRepo, chatConfigRepo, uuidGen)
+	service := usecase.NewShopService(shopItemRepo, purchaseRepo, userRepo, chatConfigRepo, uuidGen, txManager)
 
 	user := &entity.User{
 		ID:      1,
@@ -215,6 +230,7 @@ func TestShopService_PurchaseItem(t *testing.T) {
 			IsActive: true,
 		}
 
+		txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Return(nil).Once()
 		userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
 		shopItemRepo.On("FindByCode", ctx, int64(100), "BOOST").Return(item, nil).Once()
 		userRepo.On("UpdateBalance", ctx, int64(1), valueobject.NewDecimal("-50")).Return(nil).Once()
@@ -250,6 +266,7 @@ func TestShopService_PurchaseItem(t *testing.T) {
 			IsActive: true,
 		}
 
+		txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Return(nil).Once()
 		userRepo.On("FindByID", ctx, int64(2)).Return(poorUser, nil).Once()
 		shopItemRepo.On("FindByCode", ctx, int64(100), "BOOST").Return(item, nil).Once()
 
@@ -272,6 +289,7 @@ func TestShopService_PurchaseItem(t *testing.T) {
 			IsActive: true,
 		}
 
+		txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Return(nil).Once()
 		userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
 		shopItemRepo.On("FindByCode", ctx, int64(100), "LIMITED").Return(item, nil).Once()
 
