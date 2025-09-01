@@ -1,6 +1,8 @@
 package builders
 
 import (
+	"time"
+
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 )
@@ -21,10 +23,11 @@ func (b *UserBuilder) WithDefaults() *UserBuilder {
 	return b.
 		WithID(1).
 		WithChatID(100).
-		WithRole("member").
-		WithTimeZone("UTC").
-		WithDisplayName("Test User").
-		WithBalance("100.00")
+		WithUsername("Test User").
+		WithTimezone("UTC").
+		WithBalance("100.00").
+		WithCreatedAt(time.Now()).
+		WithUpdatedAt(time.Now())
 }
 
 func (b *UserBuilder) WithID(id int64) *UserBuilder {
@@ -41,23 +44,16 @@ func (b *UserBuilder) WithChatID(chatID int64) *UserBuilder {
 	return b
 }
 
-func (b *UserBuilder) WithRole(role string) *UserBuilder {
+func (b *UserBuilder) WithUsername(username string) *UserBuilder {
 	b.With(func(u *entity.User) {
-		u.Role = role
+		u.Username = username
 	})
 	return b
 }
 
-func (b *UserBuilder) WithTimeZone(timeZone string) *UserBuilder {
+func (b *UserBuilder) WithTimezone(timezone string) *UserBuilder {
 	b.With(func(u *entity.User) {
-		u.TimeZone = timeZone
-	})
-	return b
-}
-
-func (b *UserBuilder) WithDisplayName(name string) *UserBuilder {
-	b.With(func(u *entity.User) {
-		u.DisplayName = name
+		u.Timezone = timezone
 	})
 	return b
 }
@@ -69,9 +65,16 @@ func (b *UserBuilder) WithBalance(balance string) *UserBuilder {
 	return b
 }
 
-func (b *UserBuilder) WithPreferences(prefs entity.UserPreferences) *UserBuilder {
+func (b *UserBuilder) WithCreatedAt(t time.Time) *UserBuilder {
 	b.With(func(u *entity.User) {
-		u.Preferences = prefs
+		u.CreatedAt = t
+	})
+	return b
+}
+
+func (b *UserBuilder) WithUpdatedAt(t time.Time) *UserBuilder {
+	b.With(func(u *entity.User) {
+		u.UpdatedAt = t
 	})
 	return b
 }

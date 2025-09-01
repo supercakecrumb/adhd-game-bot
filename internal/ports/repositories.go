@@ -11,6 +11,7 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, user *entity.User) error
 	FindByID(ctx context.Context, id int64) (*entity.User, error)
+	FindByChatID(ctx context.Context, chatID int64) ([]*entity.User, error)
 	UpdateBalance(ctx context.Context, userID int64, delta valueobject.Decimal) error
 	Delete(ctx context.Context, id int64) error
 }

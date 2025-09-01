@@ -17,7 +17,7 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 
 	t.Run("Task with timezone uses local time", func(t *testing.T) {
 		taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
-		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
+		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1, ChatID: 1}}}
 		uuidGen := &mockUUIDGen{}
 		mockScheduler := new(mockScheduler)
 		mockIdempotencyRepo := new(mockIdempotencyRepo)
@@ -65,7 +65,7 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 
 	t.Run("Task without timezone uses UTC", func(t *testing.T) {
 		taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
-		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
+		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1, ChatID: 1}}}
 		uuidGen := &mockUUIDGen{}
 		mockScheduler := new(mockScheduler)
 		mockIdempotencyRepo := new(mockIdempotencyRepo)

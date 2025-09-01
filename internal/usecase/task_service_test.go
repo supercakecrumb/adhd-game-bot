@@ -69,6 +69,16 @@ func (m *mockUserRepo) FindByID(ctx context.Context, id int64) (*entity.User, er
 	return user, nil
 }
 
+func (m *mockUserRepo) FindByChatID(ctx context.Context, chatID int64) ([]*entity.User, error) {
+	var users []*entity.User
+	for _, user := range m.users {
+		if user.ChatID == chatID {
+			users = append(users, user)
+		}
+	}
+	return users, nil
+}
+
 func (m *mockUserRepo) UpdateBalance(ctx context.Context, userID int64, delta valueobject.Decimal) error {
 	// Not needed for these tests
 	return nil

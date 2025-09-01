@@ -1,18 +1,17 @@
 package entity
 
-import "github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
+import (
+	"time"
+
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
+)
 
 type User struct {
-	ID          int64
-	ChatID      int64  // Telegram chat ID this user belongs to
-	Role        string // "admin" or "member"
-	TimeZone    string
-	DisplayName string
-	Balance     valueobject.Decimal // Single balance in the chat's currency
-	Preferences UserPreferences
-}
-
-type UserPreferences struct {
-	EditIntervalSec int
-	NotifyOnAward   bool
+	ID        int64
+	ChatID    int64  // Chat/group this user belongs to
+	Username  string // User's display name
+	Balance   valueobject.Decimal
+	Timezone  string // IANA timezone (e.g. "America/New_York")
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

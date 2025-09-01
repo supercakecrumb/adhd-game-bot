@@ -31,6 +31,14 @@ func (m *MockUserRepository) FindByID(ctx context.Context, id int64) (*entity.Us
 	return args.Get(0).(*entity.User), args.Error(1)
 }
 
+func (m *MockUserRepository) FindByChatID(ctx context.Context, chatID int64) ([]*entity.User, error) {
+	args := m.Called(ctx, chatID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*entity.User), args.Error(1)
+}
+
 func (m *MockUserRepository) UpdateBalance(ctx context.Context, userID int64, delta valueobject.Decimal) error {
 	args := m.Called(ctx, userID, delta)
 	return args.Error(0)

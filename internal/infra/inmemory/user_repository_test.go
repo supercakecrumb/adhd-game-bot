@@ -3,6 +3,7 @@ package inmemory_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
@@ -17,10 +18,13 @@ func TestUserRepository(t *testing.T) {
 	// Test Create
 	t.Run("Create new user", func(t *testing.T) {
 		user := &entity.User{
-			ID:          1,
-			ChatID:      100,
-			DisplayName: "Test User",
-			Balance:     valueobject.NewDecimal("0"),
+			ID:        1,
+			ChatID:    100,
+			Username:  "Test User",
+			Balance:   valueobject.NewDecimal("0"),
+			Timezone:  "UTC",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		err := repo.Create(ctx, user)
@@ -29,10 +33,10 @@ func TestUserRepository(t *testing.T) {
 
 	t.Run("Create duplicate user", func(t *testing.T) {
 		user := &entity.User{
-			ID:          1,
-			ChatID:      100,
-			DisplayName: "Duplicate User",
-			Balance:     valueobject.NewDecimal("0"),
+			ID:       1,
+			ChatID:   100,
+			Username: "Duplicate User",
+			Balance:  valueobject.NewDecimal("0"),
 		}
 
 		err := repo.Create(ctx, user)
@@ -43,7 +47,7 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Find existing user", func(t *testing.T) {
 		user, err := repo.FindByID(ctx, 1)
 		assert.NoError(t, err)
-		assert.Equal(t, "Test User", user.DisplayName)
+		assert.Equal(t, "Test User", user.Username)
 	})
 
 	t.Run("Find non-existent user", func(t *testing.T) {

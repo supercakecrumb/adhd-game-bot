@@ -35,6 +35,14 @@ func (m *MockUserRepository) Delete(ctx context.Context, id int64) error {
 	return args.Error(0)
 }
 
+func (m *MockUserRepository) FindByChatID(ctx context.Context, chatID int64) ([]*entity.User, error) {
+	args := m.Called(ctx, chatID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*entity.User), args.Error(1)
+}
+
 type MockChatConfigRepository struct {
 	mock.Mock
 }
