@@ -83,8 +83,19 @@ func (s *TaskService) CompleteTask(ctx context.Context, userID int64, taskID str
 		return err
 	}
 
+	// Get time in task's timezone
+	var now time.Time
+	if task.TimeZone != "" {
+		loc, err := time.LoadLocation(task.TimeZone)
+		if err != nil {
+			return err
+		}
+		now = time.Now().In(loc)
+	} else {
+		now = time.Now()
+	}
+
 	// Update task completion
-	now := time.Now()
 	task.LastCompletedAt = &now
 	task.StreakCount++
 

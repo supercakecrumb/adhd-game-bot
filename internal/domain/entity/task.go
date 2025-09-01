@@ -25,6 +25,7 @@ type Task struct {
 	Status          string // inactive, active
 	LastCompletedAt *time.Time
 	StreakCount     int
+	TimeZone        string // IANA timezone (e.g. "America/New_York")
 }
 
 type Reward struct {
