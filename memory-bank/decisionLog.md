@@ -29,3 +29,19 @@ This file records architectural and implementation decisions...
 - **Decision**: Enforce one active timer per task/user at database level
 - **Rationale**: Prevents accidental double-starts, simplifies state management
 - **Implementation**: Unique partial index on (task_id, user_id) WHERE state = 'running'
+
+[2025-09-01 14:17:26] - ## Currency System Refactoring
+
+### Multi-Chat Currency Support
+- **Decision**: Refactor currency from string to entity with exchange rates
+- **Rationale**: Support multiple chats/groups with their own currencies and exchange rates
+- **Implementation**: 
+  - Currency entity with ChatID association
+  - Base currency concept (first currency in DB)
+  - Exchange rate storage and conversion logic
+  - Each chat can have its own set of currencies
+
+### Exchange Rate Design
+- **Decision**: Store exchange rates in Currency entity
+- **Rationale**: Simplify currency conversion and maintain rates per currency
+- **Trade-offs**: More complex queries but better data integrity
