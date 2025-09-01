@@ -4,9 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/yourusername/adhd-game-bot/internal/domain/entity"
-	"github.com/yourusername/adhd-game-bot/internal/domain/valueobject"
-	"github.com/yourusername/adhd-game-bot/internal/ports"
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
+	"github.com/supercakecrumb/adhd-game-bot/internal/ports"
 )
 
 type UserRepository struct {

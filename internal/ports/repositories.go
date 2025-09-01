@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/yourusername/adhd-game-bot/internal/domain/entity"
-	"github.com/yourusername/adhd-game-bot/internal/domain/valueobject"
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 )
 
 var (

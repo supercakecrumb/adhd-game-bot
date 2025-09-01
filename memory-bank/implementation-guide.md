@@ -9,7 +9,7 @@ This guide provides step-by-step instructions for implementing the core system f
 ### Step 1: Initialize Go Module
 
 ```bash
-go mod init github.com/yourusername/adhd-game-bot
+go mod init github.com/supercakecrumb/adhd-game-bot
 ```
 
 ### Step 2: Create Directory Structure

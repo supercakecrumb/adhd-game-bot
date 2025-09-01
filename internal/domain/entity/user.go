@@ -1,6 +1,6 @@
 package entity
 
-import "github.com/yourusername/adhd-game-bot/internal/domain/valueobject"
+import "github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 
 type User struct {
 	ID          int64

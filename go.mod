@@ -1,4 +1,4 @@
-module github.com/yourusername/adhd-game-bot
+module github.com/supercakecrumb/adhd-game-bot
 
 go 1.22.0
 
