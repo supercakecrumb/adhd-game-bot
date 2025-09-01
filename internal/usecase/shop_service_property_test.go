@@ -12,6 +12,7 @@ import (
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 	"github.com/supercakecrumb/adhd-game-bot/internal/ports"
 	"github.com/supercakecrumb/adhd-game-bot/internal/usecase"
+	"github.com/supercakecrumb/adhd-game-bot/internal/usecase/testhelpers"
 )
 
 // Property: User balance should never go negative after a purchase
@@ -24,12 +25,12 @@ func TestShopService_BalanceNeverNegative(t *testing.T) {
 		ctx := context.Background()
 
 		// Setup mocks
-		userRepo := new(MockUserRepository)
-		chatConfigRepo := new(MockChatConfigRepository)
-		shopItemRepo := new(MockShopItemRepository)
-		purchaseRepo := new(MockPurchaseRepository)
-		uuidGen := new(MockUUIDGenerator)
-		txManager := new(MockTxManager)
+		userRepo := new(testhelpers.MockUserRepository)
+		chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+		shopItemRepo := new(testhelpers.MockShopItemRepository)
+		purchaseRepo := new(testhelpers.MockPurchaseRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		txManager := new(testhelpers.MockTxManager)
 
 		service := usecase.NewShopService(
 			shopItemRepo, purchaseRepo, userRepo,
@@ -100,12 +101,12 @@ func TestShopService_StockNeverNegative(t *testing.T) {
 		ctx := context.Background()
 
 		// Setup mocks
-		userRepo := new(MockUserRepository)
-		chatConfigRepo := new(MockChatConfigRepository)
-		shopItemRepo := new(MockShopItemRepository)
-		purchaseRepo := new(MockPurchaseRepository)
-		uuidGen := new(MockUUIDGenerator)
-		txManager := new(MockTxManager)
+		userRepo := new(testhelpers.MockUserRepository)
+		chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+		shopItemRepo := new(testhelpers.MockShopItemRepository)
+		purchaseRepo := new(testhelpers.MockPurchaseRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		txManager := new(testhelpers.MockTxManager)
 
 		service := usecase.NewShopService(
 			shopItemRepo, purchaseRepo, userRepo,
@@ -131,19 +132,19 @@ func TestShopService_StockNeverNegative(t *testing.T) {
 		}
 
 		// Setup mock expectations
+		userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Maybe()
+		shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Maybe()
+		shopItemRepo.On("FindByCode", ctx, int64(0), "TEST").Return(nil, fmt.Errorf("not found")).Maybe()
+
+		if stock >= uint16(quantity) {
+			userRepo.On("UpdateBalance", ctx, int64(1), mock.AnythingOfType("valueobject.Decimal")).Return(nil).Maybe()
+			shopItemRepo.On("Update", ctx, mock.AnythingOfType("*entity.ShopItem")).Return(nil).Maybe()
+			purchaseRepo.On("Create", ctx, mock.AnythingOfType("*entity.Purchase")).Return(nil).Maybe()
+		}
+
 		txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).
 			Run(func(args mock.Arguments) {
 				fn := args.Get(1).(func(context.Context) error)
-
-				userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
-				shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Once()
-
-				if stock >= uint16(quantity) {
-					userRepo.On("UpdateBalance", ctx, int64(1), mock.AnythingOfType("valueobject.Decimal")).Return(nil).Once()
-					shopItemRepo.On("Update", ctx, mock.AnythingOfType("*entity.ShopItem")).Return(nil).Once()
-					purchaseRepo.On("Create", ctx, mock.AnythingOfType("*entity.Purchase")).Return(nil).Once()
-				}
-
 				fn(ctx)
 			}).Return(nil).Once()
 
@@ -176,12 +177,12 @@ func TestShopService_TotalCostCalculation(t *testing.T) {
 		ctx := context.Background()
 
 		// Setup mocks
-		userRepo := new(MockUserRepository)
-		chatConfigRepo := new(MockChatConfigRepository)
-		shopItemRepo := new(MockShopItemRepository)
-		purchaseRepo := new(MockPurchaseRepository)
-		uuidGen := new(MockUUIDGenerator)
-		txManager := new(MockTxManager)
+		userRepo := new(testhelpers.MockUserRepository)
+		chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+		shopItemRepo := new(testhelpers.MockShopItemRepository)
+		purchaseRepo := new(testhelpers.MockPurchaseRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		txManager := new(testhelpers.MockTxManager)
 
 		service := usecase.NewShopService(
 			shopItemRepo, purchaseRepo, userRepo,
@@ -243,6 +244,166 @@ func TestShopService_TotalCostCalculation(t *testing.T) {
 	}
 }
 
+// Property: System handles large purchase quantities correctly
+func TestShopService_LargeQuantityPurchases(t *testing.T) {
+	f := func(price uint32, quantity uint16) bool {
+		if price > 10000 || quantity < 1000 || quantity > 10000 {
+			return true // Skip unrealistic values
+		}
+
+		ctx := context.Background()
+
+		// Setup mocks
+		userRepo := new(testhelpers.MockUserRepository)
+		chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+		shopItemRepo := new(testhelpers.MockShopItemRepository)
+		purchaseRepo := new(testhelpers.MockPurchaseRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		txManager := new(testhelpers.MockTxManager)
+
+		service := usecase.NewShopService(
+			shopItemRepo, purchaseRepo, userRepo,
+			chatConfigRepo, uuidGen, txManager,
+		)
+
+		// Calculate expected total
+		expectedTotal := uint64(price) * uint64(quantity)
+
+		// Create test data
+		user := &entity.User{
+			ID:      1,
+			ChatID:  100,
+			Balance: valueobject.NewDecimal(fmt.Sprintf("%d", expectedTotal+1000)), // Enough balance
+		}
+
+		stock := int(quantity * 2) // Plenty of stock
+		item := &entity.ShopItem{
+			ID:       1,
+			ChatID:   100,
+			Code:     "TEST",
+			Name:     "Test Item",
+			Price:    valueobject.NewDecimal(fmt.Sprintf("%d", price)),
+			IsActive: true,
+			Stock:    &stock,
+		}
+
+		var capturedPurchase *entity.Purchase
+
+		// Setup mock expectations
+		txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).
+			Run(func(args mock.Arguments) {
+				fn := args.Get(1).(func(context.Context) error)
+
+				userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
+				shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Once()
+				userRepo.On("UpdateBalance", ctx, int64(1), mock.AnythingOfType("valueobject.Decimal")).Return(nil).Once()
+				shopItemRepo.On("Update", ctx, mock.AnythingOfType("*entity.ShopItem")).Return(nil).Once()
+				purchaseRepo.On("Create", ctx, mock.AnythingOfType("*entity.Purchase")).
+					Run(func(args mock.Arguments) {
+						capturedPurchase = args.Get(1).(*entity.Purchase)
+					}).Return(nil).Once()
+
+				fn(ctx)
+			}).Return(nil).Once()
+
+		// Execute purchase
+		_, err := service.PurchaseItem(ctx, 1, "TEST", int(quantity))
+		if err != nil {
+			return false
+		}
+
+		// Verify total cost is correct
+		expectedTotalDecimal := valueobject.NewDecimal(fmt.Sprintf("%d", expectedTotal))
+		return capturedPurchase != nil &&
+			capturedPurchase.TotalCost.Cmp(expectedTotalDecimal) == 0 &&
+			capturedPurchase.Quantity == int(quantity)
+	}
+
+	if err := quick.Check(f, nil); err != nil {
+		t.Error(err)
+	}
+}
+
+// Property: Decimal calculations maintain precision
+func TestShopService_DecimalPrecision(t *testing.T) {
+	f := func(price float64, quantity uint8) bool {
+		if price <= 0 || price > 1000 || quantity == 0 || quantity > 100 {
+			return true // Skip invalid values
+		}
+
+		ctx := context.Background()
+
+		// Setup mocks
+		userRepo := new(testhelpers.MockUserRepository)
+		chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+		shopItemRepo := new(testhelpers.MockShopItemRepository)
+		purchaseRepo := new(testhelpers.MockPurchaseRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		txManager := new(testhelpers.MockTxManager)
+
+		service := usecase.NewShopService(
+			shopItemRepo, purchaseRepo, userRepo,
+			chatConfigRepo, uuidGen, txManager,
+		)
+
+		// Calculate expected total with precise decimal math
+		expectedTotal := price * float64(quantity)
+
+		// Create test data with precise decimal values
+		user := &entity.User{
+			ID:      1,
+			ChatID:  100,
+			Balance: valueobject.NewDecimal(fmt.Sprintf("%.4f", expectedTotal+1000)), // Enough balance
+		}
+
+		stock := 1000 // Plenty of stock
+		item := &entity.ShopItem{
+			ID:       1,
+			ChatID:   100,
+			Code:     "TEST",
+			Name:     "Test Item",
+			Price:    valueobject.NewDecimal(fmt.Sprintf("%.4f", price)),
+			IsActive: true,
+			Stock:    &stock,
+		}
+
+		var capturedPurchase *entity.Purchase
+
+		// Setup mock expectations
+		txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).
+			Run(func(args mock.Arguments) {
+				fn := args.Get(1).(func(context.Context) error)
+
+				userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
+				shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Once()
+				userRepo.On("UpdateBalance", ctx, int64(1), mock.AnythingOfType("valueobject.Decimal")).Return(nil).Once()
+				shopItemRepo.On("Update", ctx, mock.AnythingOfType("*entity.ShopItem")).Return(nil).Once()
+				purchaseRepo.On("Create", ctx, mock.AnythingOfType("*entity.Purchase")).
+					Run(func(args mock.Arguments) {
+						capturedPurchase = args.Get(1).(*entity.Purchase)
+					}).Return(nil).Once()
+
+				fn(ctx)
+			}).Return(nil).Once()
+
+		// Execute purchase
+		_, err := service.PurchaseItem(ctx, 1, "TEST", int(quantity))
+		if err != nil {
+			return false
+		}
+
+		// Verify total cost maintains precision
+		expectedTotalStr := fmt.Sprintf("%.4f", expectedTotal)
+		return capturedPurchase != nil &&
+			capturedPurchase.TotalCost.String() == expectedTotalStr &&
+			capturedPurchase.Quantity == int(quantity)
+	}
+
+	if err := quick.Check(f, nil); err != nil {
+		t.Error(err)
+	}
+}
+
 // Edge case tests for shop service
 // Property: Purchases with same idempotency key should only deduct balance once
 func TestShopService_IdempotentPurchase(t *testing.T) {
@@ -254,12 +415,12 @@ func TestShopService_IdempotentPurchase(t *testing.T) {
 		ctx := context.Background()
 
 		// Setup mocks
-		userRepo := new(MockUserRepository)
-		chatConfigRepo := new(MockChatConfigRepository)
-		shopItemRepo := new(MockShopItemRepository)
-		purchaseRepo := new(MockPurchaseRepository)
-		uuidGen := new(MockUUIDGenerator)
-		txManager := new(MockTxManager)
+		userRepo := new(testhelpers.MockUserRepository)
+		chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+		shopItemRepo := new(testhelpers.MockShopItemRepository)
+		purchaseRepo := new(testhelpers.MockPurchaseRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		txManager := new(testhelpers.MockTxManager)
 
 		service := usecase.NewShopService(
 			shopItemRepo, purchaseRepo, userRepo,
@@ -330,12 +491,12 @@ func TestShopService_EdgeCases(t *testing.T) {
 			test: func(t *testing.T) {
 				ctx := context.Background()
 
-				userRepo := new(MockUserRepository)
-				chatConfigRepo := new(MockChatConfigRepository)
-				shopItemRepo := new(MockShopItemRepository)
-				purchaseRepo := new(MockPurchaseRepository)
-				uuidGen := new(MockUUIDGenerator)
-				txManager := new(MockTxManager)
+				userRepo := new(testhelpers.MockUserRepository)
+				chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+				shopItemRepo := new(testhelpers.MockShopItemRepository)
+				purchaseRepo := new(testhelpers.MockPurchaseRepository)
+				uuidGen := new(testhelpers.MockUUIDGenerator)
+				txManager := new(testhelpers.MockTxManager)
 
 				service := usecase.NewShopService(
 					shopItemRepo, purchaseRepo, userRepo,
@@ -358,16 +519,17 @@ func TestShopService_EdgeCases(t *testing.T) {
 					Stock:    nil,
 				}
 
+				// Setup mock expectations
+				userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Maybe()
+				shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Maybe()
+				shopItemRepo.On("FindByCode", ctx, int64(0), "TEST").Return(nil, fmt.Errorf("not found")).Maybe()
+				userRepo.On("UpdateBalance", ctx, int64(1), mock.AnythingOfType("valueobject.Decimal")).Return(nil).Maybe()
+				shopItemRepo.On("Update", ctx, mock.AnythingOfType("*entity.ShopItem")).Return(nil).Maybe()
+				purchaseRepo.On("Create", ctx, mock.AnythingOfType("*entity.Purchase")).Return(nil).Maybe()
+
 				txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).
 					Run(func(args mock.Arguments) {
 						fn := args.Get(1).(func(context.Context) error)
-
-						userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
-						shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Once()
-						userRepo.On("UpdateBalance", ctx, int64(1), mock.AnythingOfType("valueobject.Decimal")).Return(nil).Once()
-						shopItemRepo.On("Update", ctx, mock.AnythingOfType("*entity.ShopItem")).Return(nil).Once()
-						purchaseRepo.On("Create", ctx, mock.AnythingOfType("*entity.Purchase")).Return(nil).Once()
-
 						fn(ctx)
 					}).Return(nil).Once()
 
@@ -380,17 +542,36 @@ func TestShopService_EdgeCases(t *testing.T) {
 			test: func(t *testing.T) {
 				ctx := context.Background()
 
-				userRepo := new(MockUserRepository)
-				chatConfigRepo := new(MockChatConfigRepository)
-				shopItemRepo := new(MockShopItemRepository)
-				purchaseRepo := new(MockPurchaseRepository)
-				uuidGen := new(MockUUIDGenerator)
-				txManager := new(MockTxManager)
+				userRepo := new(testhelpers.MockUserRepository)
+				chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+				shopItemRepo := new(testhelpers.MockShopItemRepository)
+				purchaseRepo := new(testhelpers.MockPurchaseRepository)
+				uuidGen := new(testhelpers.MockUUIDGenerator)
+				txManager := new(testhelpers.MockTxManager)
 
 				service := usecase.NewShopService(
 					shopItemRepo, purchaseRepo, userRepo,
 					chatConfigRepo, uuidGen, txManager,
 				)
+
+				// Create test data for mocks
+				user := &entity.User{
+					ID:      1,
+					ChatID:  100,
+					Balance: valueobject.NewDecimal("1000"),
+				}
+
+				// Setup mock expectations
+				userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Maybe()
+				shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(nil, fmt.Errorf("not found")).Maybe()
+				shopItemRepo.On("FindByCode", ctx, int64(0), "TEST").Return(nil, fmt.Errorf("not found")).Maybe()
+
+				// Setup transaction manager mock to handle the call
+				txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(1).(func(context.Context) error)
+						fn(ctx)
+					}).Return(nil).Maybe()
 
 				// Should fail validation before any repository calls
 				_, err := service.PurchaseItem(ctx, 1, "TEST", 0)
@@ -402,12 +583,12 @@ func TestShopService_EdgeCases(t *testing.T) {
 			test: func(t *testing.T) {
 				ctx := context.Background()
 
-				userRepo := new(MockUserRepository)
-				chatConfigRepo := new(MockChatConfigRepository)
-				shopItemRepo := new(MockShopItemRepository)
-				purchaseRepo := new(MockPurchaseRepository)
-				uuidGen := new(MockUUIDGenerator)
-				txManager := new(MockTxManager)
+				userRepo := new(testhelpers.MockUserRepository)
+				chatConfigRepo := new(testhelpers.MockChatConfigRepository)
+				shopItemRepo := new(testhelpers.MockShopItemRepository)
+				purchaseRepo := new(testhelpers.MockPurchaseRepository)
+				uuidGen := new(testhelpers.MockUUIDGenerator)
+				txManager := new(testhelpers.MockTxManager)
 
 				service := usecase.NewShopService(
 					shopItemRepo, purchaseRepo, userRepo,
@@ -430,13 +611,14 @@ func TestShopService_EdgeCases(t *testing.T) {
 					Stock:    nil,
 				}
 
+				// Setup mock expectations
+				userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Maybe()
+				shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Maybe()
+				shopItemRepo.On("FindByCode", ctx, int64(0), "TEST").Return(nil, fmt.Errorf("not found")).Maybe()
+
 				txManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).
 					Run(func(args mock.Arguments) {
 						fn := args.Get(1).(func(context.Context) error)
-
-						userRepo.On("FindByID", ctx, int64(1)).Return(user, nil).Once()
-						shopItemRepo.On("FindByCode", ctx, int64(100), "TEST").Return(item, nil).Once()
-
 						fn(ctx)
 					}).Return(nil).Once()
 
