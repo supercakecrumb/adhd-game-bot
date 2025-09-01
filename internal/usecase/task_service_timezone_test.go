@@ -13,14 +13,14 @@ import (
 
 func TestTimezoneAwareScheduling(t *testing.T) {
 	ctx := context.Background()
-	taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
-	userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
-	uuidGen := &mockUUIDGen{}
-	mockScheduler := new(mockScheduler)
-
-	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler)
 
 	t.Run("Task with timezone uses local time", func(t *testing.T) {
+		taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
+		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
+		uuidGen := &mockUUIDGen{}
+		mockScheduler := new(mockScheduler)
+
+		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler)
 		task := &entity.Task{
 			ID:          "tz-task",
 			Title:       "Timezone Test",
@@ -49,6 +49,13 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 	})
 
 	t.Run("Task without timezone uses UTC", func(t *testing.T) {
+		taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
+		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
+		uuidGen := &mockUUIDGen{}
+		mockScheduler := new(mockScheduler)
+
+		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler)
+
 		task := &entity.Task{
 			ID:          "no-tz-task",
 			Title:       "No Timezone",

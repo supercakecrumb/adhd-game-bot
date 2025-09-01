@@ -119,10 +119,15 @@ func TestTaskService(t *testing.T) {
 			Category:    "daily",
 		}
 
+		// Mock the scheduler call for daily tasks
+		mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Task")).Return(nil).Once()
+
 		created, err := service.CreateTask(ctx, 1, task)
 		require.NoError(t, err)
 		require.Equal(t, "generated-uuid", created.ID)
 		require.Equal(t, "Test Task", created.Title)
+
+		mockScheduler.AssertExpectations(t)
 	})
 
 	t.Run("CompleteTask", func(t *testing.T) {
@@ -130,8 +135,12 @@ func TestTaskService(t *testing.T) {
 			ID:          "task-1",
 			Title:       "Complete Me",
 			StreakCount: 0,
+			Category:    "daily",
 		}
 		taskRepo.tasks[task.ID] = task
+
+		// Mock the scheduler call for daily tasks
+		mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Task")).Return(nil).Once()
 
 		err := service.CompleteTask(ctx, 1, "task-1")
 		require.NoError(t, err)
@@ -140,6 +149,8 @@ func TestTaskService(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, updated.LastCompletedAt)
 		require.Equal(t, 1, updated.StreakCount)
+
+		mockScheduler.AssertExpectations(t)
 	})
 
 	t.Run("ListTasksByUser", func(t *testing.T) {

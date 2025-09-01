@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
@@ -23,6 +24,12 @@ func TestUserRepository(t *testing.T) {
 	db, err := sql.Open("postgres", connStr)
 	require.NoError(t, err)
 	defer db.Close()
+
+	// Try to ping the database
+	err = db.Ping()
+	if err != nil {
+		t.Skip("Skipping test: database not available:", err)
+	}
 
 	// Clean database before tests
 	_, err = db.Exec("DROP TABLE IF EXISTS users CASCADE")

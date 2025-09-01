@@ -92,7 +92,8 @@ func (s *TaskService) CompleteTask(ctx context.Context, userID int64, taskID str
 		}
 		now = time.Now().In(loc)
 	} else {
-		now = time.Now()
+		// Use UTC when no timezone is specified
+		now = time.Now().UTC()
 	}
 
 	// Update task completion
