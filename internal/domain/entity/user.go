@@ -8,7 +8,7 @@ type User struct {
 	Role        string // "admin" or "member"
 	TimeZone    string
 	DisplayName string
-	Balances    map[int64]valueobject.Decimal // currencyID -> amount
+	Balance     valueobject.Decimal // Single balance in the chat's currency
 	Preferences UserPreferences
 }
 

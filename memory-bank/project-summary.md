@@ -157,3 +157,30 @@ The planning phase is complete. We have:
 - ✅ All design decisions documented
 
 The next step is to switch to Code mode and begin the implementation, starting with the project setup and first failing tests.
+## Implementation Progress
+
+[2025-09-01 14:40:15] - ## Currency System Refactoring Complete
+
+### Changes Made:
+1. **Simplified Currency System**: Changed from multi-currency with exchange rates to single currency per chat
+2. **Added Shop System**: 
+   - Created ShopItem entity for purchasable items
+   - Created Purchase entity for transaction history
+   - Implemented ShopService for managing shop operations
+3. **Updated Database Schema**:
+   - Removed currencies and user_balances tables
+   - Added single balance column to users table
+   - Created chat_configs table for currency name configuration
+   - Created shop_items and purchases tables
+4. **Updated Repositories**:
+   - Simplified UserRepository to use single balance
+   - Created ChatConfigRepository, ShopItemRepository, and PurchaseRepository
+   - Updated all tests to match new interfaces
+5. **Removed Old Files**:
+   - Deleted currency_service.go and related tests
+   - Deleted currency entity and repository
+
+### Current State:
+- All code compiles successfully
+- Shop service tests are passing
+- Ready for transaction management implementation

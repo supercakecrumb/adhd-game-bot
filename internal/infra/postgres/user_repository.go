@@ -26,20 +26,12 @@ func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
 	}
 
 	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO users (id, chat_id, role, timezone, display_name, preferences_json)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		user.ID, user.ChatID, user.Role, user.TimeZone, user.DisplayName, prefs)
+		INSERT INTO users (id, chat_id, role, timezone, display_name, preferences_json, balance)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		user.ID, user.ChatID, user.Role, user.TimeZone, user.DisplayName, prefs, user.Balance.String())
+
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
-	}
-
-	// Initialize balances for all currencies in the user's chat
-	_, err = r.db.ExecContext(ctx, `
-		INSERT INTO user_balances (user_id, currency_id, amount)
-		SELECT $1, id, '0' FROM currencies WHERE chat_id = $2`,
-		user.ID, user.ChatID)
-	if err != nil {
-		return fmt.Errorf("failed to initialize balances: %w", err)
 	}
 
 	return nil
@@ -48,11 +40,13 @@ func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
 	var user entity.User
 	var prefsJSON []byte
+	var balanceStr string
 
 	err := r.db.QueryRowContext(ctx, `
-		SELECT id, chat_id, role, timezone, display_name, preferences_json
+		SELECT id, chat_id, role, timezone, display_name, preferences_json, balance
 		FROM users WHERE id = $1`, id).Scan(
-		&user.ID, &user.ChatID, &user.Role, &user.TimeZone, &user.DisplayName, &prefsJSON)
+		&user.ID, &user.ChatID, &user.Role, &user.TimeZone, &user.DisplayName, &prefsJSON, &balanceStr)
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ports.ErrUserNotFound
@@ -65,36 +59,23 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, 
 		return nil, fmt.Errorf("failed to unmarshal preferences: %w", err)
 	}
 
-	// Get balances
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT currency_id, amount FROM user_balances WHERE user_id = $1`, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query balances: %w", err)
-	}
-	defer rows.Close()
-
-	user.Balances = make(map[int64]valueobject.Decimal)
-	for rows.Next() {
-		var currencyID int64
-		var amount string
-		if err := rows.Scan(&currencyID, &amount); err != nil {
-			return nil, fmt.Errorf("failed to scan balance: %w", err)
-		}
-		user.Balances[currencyID] = valueobject.NewDecimal(amount)
-	}
+	// Parse balance
+	user.Balance = valueobject.NewDecimal(balanceStr)
 
 	return &user, nil
 }
 
-func (r *UserRepository) UpdateBalance(ctx context.Context, userID int64, currencyID int64, delta valueobject.Decimal) error {
+func (r *UserRepository) UpdateBalance(ctx context.Context, userID int64, delta valueobject.Decimal) error {
 	_, err := r.db.ExecContext(ctx, `
-		UPDATE user_balances
-		SET amount = CAST(amount AS NUMERIC) + CAST($1 AS NUMERIC)
-		WHERE user_id = $2 AND currency_id = $3`,
-		delta.String(), userID, currencyID)
+		UPDATE users
+		SET balance = CAST(balance AS NUMERIC) + CAST($1 AS NUMERIC)
+		WHERE id = $2`,
+		delta.String(), userID)
+
 	if err != nil {
 		return fmt.Errorf("failed to update balance: %w", err)
 	}
+
 	return nil
 }
 

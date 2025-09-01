@@ -18,7 +18,9 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Create new user", func(t *testing.T) {
 		user := &entity.User{
 			ID:          1,
+			ChatID:      100,
 			DisplayName: "Test User",
+			Balance:     valueobject.NewDecimal("0"),
 		}
 
 		err := repo.Create(ctx, user)
@@ -28,7 +30,9 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Create duplicate user", func(t *testing.T) {
 		user := &entity.User{
 			ID:          1,
+			ChatID:      100,
 			DisplayName: "Duplicate User",
+			Balance:     valueobject.NewDecimal("0"),
 		}
 
 		err := repo.Create(ctx, user)
@@ -49,18 +53,18 @@ func TestUserRepository(t *testing.T) {
 
 	// Test UpdateBalance
 	t.Run("Update balance", func(t *testing.T) {
-		err := repo.UpdateBalance(ctx, 1, "MM", valueobject.NewDecimal("10.50"))
+		err := repo.UpdateBalance(ctx, 1, valueobject.NewDecimal("10.50"))
 		assert.NoError(t, err)
 
 		user, err := repo.FindByID(ctx, 1)
 		assert.NoError(t, err)
 		// shopspring/decimal's String() doesn't preserve trailing zeros
-		val := user.Balances["MM"].Float64()
+		val := user.Balance.Float64()
 		assert.Equal(t, 10.5, val)
 	})
 
 	t.Run("Update balance nonexistent user", func(t *testing.T) {
-		err := repo.UpdateBalance(ctx, 999, "MM", valueobject.NewDecimal("10.50"))
+		err := repo.UpdateBalance(ctx, 999, valueobject.NewDecimal("10.50"))
 		assert.Error(t, err)
 	})
 

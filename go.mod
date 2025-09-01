@@ -12,5 +12,6 @@ require (
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

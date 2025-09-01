@@ -25,25 +25,19 @@ func TestUserRepository(t *testing.T) {
 	defer db.Close()
 
 	// Clean database before tests
-	_, err = db.Exec("DROP TABLE IF EXISTS users, user_balances CASCADE")
+	_, err = db.Exec("DROP TABLE IF EXISTS users CASCADE")
 	require.NoError(t, err)
 
 	// Apply migrations
 	_, err = db.Exec(`
 		CREATE TABLE users (
-			id BIGSERIAL PRIMARY KEY,
+			id BIGINT PRIMARY KEY,
+			chat_id BIGINT NOT NULL,
 			role VARCHAR(10) NOT NULL,
 			timezone VARCHAR(50) NOT NULL,
 			display_name VARCHAR(255) NOT NULL,
-			preferences_json JSONB NOT NULL
-		);
-		
-		CREATE TABLE user_balances (
-			user_id BIGINT NOT NULL,
-			currency_code VARCHAR(10) NOT NULL,
-			amount NUMERIC(20, 8) NOT NULL,
-			PRIMARY KEY (user_id, currency_code),
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+			preferences_json JSONB NOT NULL,
+			balance NUMERIC(20, 8) NOT NULL DEFAULT 0
 		);
 	`)
 	require.NoError(t, err)
@@ -53,9 +47,11 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Create and find user", func(t *testing.T) {
 		user := &entity.User{
 			ID:          1,
+			ChatID:      100,
 			Role:        "member",
 			TimeZone:    "UTC",
 			DisplayName: "Test User",
+			Balance:     valueobject.NewDecimal("10.5"),
 			Preferences: entity.UserPreferences{
 				EditIntervalSec: 300,
 				NotifyOnAward:   true,
@@ -65,30 +61,30 @@ func TestUserRepository(t *testing.T) {
 		err := repo.Create(context.Background(), user)
 		require.NoError(t, err)
 
-		// Initialize some balances for testing
-		_, err = db.Exec(`
-			INSERT INTO user_balances (user_id, currency_code, amount)
-			VALUES (1, 'MM', 10.5), (1, 'BS', 5.25)
-		`)
+		found, err := repo.FindByID(context.Background(), 1)
+		require.NoError(t, err)
+		require.Equal(t, user.ID, found.ID)
+		require.Equal(t, user.ChatID, found.ChatID)
+		require.Equal(t, user.DisplayName, found.DisplayName)
+		require.Equal(t, 10.5, found.Balance.Float64())
+	})
+
+	t.Run("Update balance", func(t *testing.T) {
+		err := repo.UpdateBalance(context.Background(), 1, valueobject.NewDecimal("5.25"))
 		require.NoError(t, err)
 
 		found, err := repo.FindByID(context.Background(), 1)
 		require.NoError(t, err)
-		require.Equal(t, user.ID, found.ID)
-		require.Equal(t, user.DisplayName, found.DisplayName)
-		require.Equal(t, 10.5, found.Balances["MM"].Float64())
-		require.Equal(t, 5.25, found.Balances["BS"].Float64())
+		require.Equal(t, 15.75, found.Balance.Float64()) // 10.5 + 5.25
 	})
 
-	t.Run("Update balance", func(t *testing.T) {
-		err := repo.UpdateBalance(context.Background(), 1, "MM", valueobject.NewDecimal("5.25"))
+	t.Run("Update balance negative", func(t *testing.T) {
+		err := repo.UpdateBalance(context.Background(), 1, valueobject.NewDecimal("-5.25"))
 		require.NoError(t, err)
 
-		var balance string
-		err = db.QueryRow("SELECT amount FROM user_balances WHERE user_id = 1 AND currency_code = 'MM'").
-			Scan(&balance)
+		found, err := repo.FindByID(context.Background(), 1)
 		require.NoError(t, err)
-		require.Equal(t, "15.75000000", balance) // 10.5 + 5.25
+		require.Equal(t, 10.5, found.Balance.Float64()) // 15.75 - 5.25
 	})
 
 	t.Run("Delete user", func(t *testing.T) {

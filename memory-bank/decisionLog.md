@@ -45,3 +45,22 @@ This file records architectural and implementation decisions...
 - **Decision**: Store exchange rates in Currency entity
 - **Rationale**: Simplify currency conversion and maintain rates per currency
 - **Trade-offs**: More complex queries but better data integrity
+
+[2025-09-01 14:26:29] - ## Simplified Currency and Shop System
+
+### Single Currency per Chat
+- **Decision**: Simplify to one currency per chat with configurable name
+- **Rationale**: Simpler user experience, easier to understand
+- **Implementation**: 
+  - Each chat has one currency with custom name
+  - No exchange rates needed
+  - User balances are simple amounts
+
+### Shop/Market System
+- **Decision**: Add shop with items users can purchase
+- **Rationale**: Provide motivation through rewards and purchases
+- **Implementation**:
+  - ShopItem entity with price and description
+  - Items can be global or chat-specific
+  - Purchase history tracking
+  - Stock/availability management

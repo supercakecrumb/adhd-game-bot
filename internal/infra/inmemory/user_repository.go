@@ -44,7 +44,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, 
 	return user, nil
 }
 
-func (r *UserRepository) UpdateBalance(ctx context.Context, userID int64, currency string, delta valueobject.Decimal) error {
+func (r *UserRepository) UpdateBalance(ctx context.Context, userID int64, delta valueobject.Decimal) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -53,12 +53,7 @@ func (r *UserRepository) UpdateBalance(ctx context.Context, userID int64, curren
 		return ports.ErrUserNotFound
 	}
 
-	if user.Balances == nil {
-		user.Balances = make(map[string]valueobject.Decimal)
-	}
-
-	current := user.Balances[currency]
-	user.Balances[currency] = current.Add(delta)
+	user.Balance = user.Balance.Add(delta)
 	return nil
 }
 
