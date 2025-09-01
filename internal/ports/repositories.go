@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
@@ -46,4 +47,10 @@ type PurchaseRepository interface {
 
 type UUIDGenerator interface {
 	New() string
+}
+
+type Scheduler interface {
+	ScheduleRecurringTask(ctx context.Context, task *entity.Task) error
+	CancelScheduledTask(ctx context.Context, taskID string) error
+	GetNextOccurrence(ctx context.Context, taskID string) (time.Time, error)
 }

@@ -9,20 +9,23 @@ import (
 )
 
 type TaskService struct {
-	taskRepo ports.TaskRepository
-	userRepo ports.UserRepository
-	uuidGen  ports.UUIDGenerator
+	taskRepo  ports.TaskRepository
+	userRepo  ports.UserRepository
+	uuidGen   ports.UUIDGenerator
+	scheduler ports.Scheduler
 }
 
 func NewTaskService(
 	taskRepo ports.TaskRepository,
 	userRepo ports.UserRepository,
 	uuidGen ports.UUIDGenerator,
+	scheduler ports.Scheduler,
 ) *TaskService {
 	return &TaskService{
-		taskRepo: taskRepo,
-		userRepo: userRepo,
-		uuidGen:  uuidGen,
+		taskRepo:  taskRepo,
+		userRepo:  userRepo,
+		uuidGen:   uuidGen,
+		scheduler: scheduler,
 	}
 }
 
@@ -40,6 +43,14 @@ func (s *TaskService) CreateTask(ctx context.Context, userID int64, task *entity
 	err = s.taskRepo.Create(ctx, task)
 	if err != nil {
 		return nil, err
+	}
+
+	// Schedule recurring task if needed
+	if task.Category == "daily" || task.Category == "weekly" {
+		err = s.scheduler.ScheduleRecurringTask(ctx, task)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return task, nil
@@ -77,7 +88,17 @@ func (s *TaskService) CompleteTask(ctx context.Context, userID int64, taskID str
 	task.LastCompletedAt = &now
 	task.StreakCount++
 
-	return s.taskRepo.Update(ctx, task)
+	err = s.taskRepo.Update(ctx, task)
+	if err != nil {
+		return err
+	}
+
+	// Reschedule recurring task
+	if task.Category == "daily" || task.Category == "weekly" {
+		return s.scheduler.ScheduleRecurringTask(ctx, task)
+	}
+
+	return nil
 }
 
 func (s *TaskService) ListTasksByUser(ctx context.Context, userID int64) ([]*entity.Task, error) {

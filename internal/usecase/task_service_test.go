@@ -3,9 +3,12 @@ package usecase_test
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 	"github.com/supercakecrumb/adhd-game-bot/internal/usecase"
 )
 
@@ -65,7 +68,7 @@ func (m *mockUserRepo) FindByID(ctx context.Context, id int64) (*entity.User, er
 	return user, nil
 }
 
-func (m *mockUserRepo) UpdateBalance(ctx context.Context, userID int64, currency string, delta entity.Decimal) error {
+func (m *mockUserRepo) UpdateBalance(ctx context.Context, userID int64, delta valueobject.Decimal) error {
 	// Not needed for these tests
 	return nil
 }
@@ -77,6 +80,25 @@ func (m *mockUserRepo) Delete(ctx context.Context, id int64) error {
 
 type mockUUIDGen struct{}
 
+type mockScheduler struct {
+	mock.Mock
+}
+
+func (m *mockScheduler) ScheduleRecurringTask(ctx context.Context, task *entity.Task) error {
+	args := m.Called(ctx, task)
+	return args.Error(0)
+}
+
+func (m *mockScheduler) CancelScheduledTask(ctx context.Context, taskID string) error {
+	args := m.Called(ctx, taskID)
+	return args.Error(0)
+}
+
+func (m *mockScheduler) GetNextOccurrence(ctx context.Context, taskID string) (time.Time, error) {
+	args := m.Called(ctx, taskID)
+	return args.Get(0).(time.Time), args.Error(1)
+}
+
 func (m *mockUUIDGen) New() string {
 	return "generated-uuid"
 }
@@ -87,7 +109,8 @@ func TestTaskService(t *testing.T) {
 	userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
 	uuidGen := &mockUUIDGen{}
 
-	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen)
+	mockScheduler := new(mockScheduler)
+	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler)
 
 	t.Run("CreateTask", func(t *testing.T) {
 		task := &entity.Task{
