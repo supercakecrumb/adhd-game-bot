@@ -10,20 +10,20 @@ import (
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
 	"github.com/supercakecrumb/adhd-game-bot/internal/ports"
 	"github.com/supercakecrumb/adhd-game-bot/internal/usecase"
+	"github.com/supercakecrumb/adhd-game-bot/internal/usecase/testhelpers"
 )
 
 func TestTimezoneAwareScheduling(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Task with timezone uses local time", func(t *testing.T) {
-		taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
+		taskRepo := new(testhelpers.MockTaskRepository)
 		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1, ChatID: 1}}}
 		uuidGen := &mockUUIDGen{}
 		mockScheduler := new(mockScheduler)
-		mockIdempotencyRepo := new(mockIdempotencyRepo)
+		mockIdempotencyRepo := new(testhelpers.MockIdempotencyRepository)
 		mockTxManager := new(mockTxManager)
 
-		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 		task := &entity.Task{
 			ID:          "tz-task",
 			Title:       "Timezone Test",
@@ -31,7 +31,11 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 			TimeZone:    "America/New_York",
 			StreakCount: 0,
 		}
-		taskRepo.tasks[task.ID] = task
+
+		taskRepo.On("FindByID", ctx, "tz-task").Return(task, nil)
+		taskRepo.On("Update", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+
+		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 
 		// Mock idempotency
 		mockIdempotencyRepo.On("FindByKey", ctx, mock.AnythingOfType("string")).Return(nil, ports.ErrIdempotencyKeyNotFound).Once()
@@ -64,14 +68,12 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 	})
 
 	t.Run("Task without timezone uses UTC", func(t *testing.T) {
-		taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
+		taskRepo := new(testhelpers.MockTaskRepository)
 		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1, ChatID: 1}}}
 		uuidGen := &mockUUIDGen{}
 		mockScheduler := new(mockScheduler)
-		mockIdempotencyRepo := new(mockIdempotencyRepo)
+		mockIdempotencyRepo := new(testhelpers.MockIdempotencyRepository)
 		mockTxManager := new(mockTxManager)
-
-		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 
 		task := &entity.Task{
 			ID:          "no-tz-task",
@@ -79,7 +81,11 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 			Category:    "daily",
 			StreakCount: 0,
 		}
-		taskRepo.tasks[task.ID] = task
+
+		taskRepo.On("FindByID", ctx, "no-tz-task").Return(task, nil)
+		taskRepo.On("Update", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+
+		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 
 		// Mock idempotency
 		mockIdempotencyRepo.On("FindByKey", ctx, mock.AnythingOfType("string")).Return(nil, ports.ErrIdempotencyKeyNotFound).Once()

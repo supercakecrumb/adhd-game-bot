@@ -19,30 +19,40 @@ func TestCompleteShopWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup infrastructure
-	userRepo := inmemory.NewUserRepository()
-	chatConfigRepo := inmemory.NewChatConfigRepository()
 	shopItemRepo := inmemory.NewShopItemRepository()
 	purchaseRepo := inmemory.NewPurchaseRepository()
+	userRepo := inmemory.NewUserRepository()
+	chatConfigRepo := inmemory.NewChatConfigRepository()
+	discountTierRepo := inmemory.NewDiscountTierRepository()
+	idempotencyRepo := inmemory.NewInMemoryIdempotencyRepository()
 	txManager := inmemory.NewTxManager()
 	uuidGen := &mockUUIDGenerator{counter: 0}
 
 	// Create services
-	shopService := usecase.NewShopService(
+	shopService := usecase.NewShopServiceV2(
 		shopItemRepo,
 		purchaseRepo,
 		userRepo,
 		chatConfigRepo,
+		discountTierRepo,
 		uuidGen,
 		txManager,
+		idempotencyRepo,
 	)
 
 	// Step 1: Setup chat configuration
 	t.Run("Setup chat configuration", func(t *testing.T) {
-		err := shopService.SetCurrencyName(ctx, 100, "Gold Coins")
+		config := &entity.ChatConfig{
+			ChatID:       100,
+			CurrencyName: "Gold Coins",
+		}
+		err := chatConfigRepo.Create(ctx, config)
 		require.NoError(t, err)
 
 		// Verify currency name was set
-		currencyName, err := shopService.GetCurrencyName(ctx, 100)
+		foundConfig, err := chatConfigRepo.FindByChatID(ctx, 100)
+		require.NoError(t, err)
+		currencyName := foundConfig.CurrencyName
 		require.NoError(t, err)
 		assert.Equal(t, "Gold Coins", currencyName)
 	})
@@ -80,7 +90,7 @@ func TestCompleteShopWorkflow(t *testing.T) {
 			IsActive: true,
 			Stock:    &stock,
 		}
-		err := shopService.CreateShopItem(ctx, item1)
+		err := shopItemRepo.Create(ctx, item1)
 		require.NoError(t, err)
 
 		// Create an unlimited stock item
@@ -93,7 +103,7 @@ func TestCompleteShopWorkflow(t *testing.T) {
 			IsActive: true,
 			Stock:    nil,
 		}
-		err = shopService.CreateShopItem(ctx, item2)
+		err = shopItemRepo.Create(ctx, item2)
 		require.NoError(t, err)
 
 		// Create a global item (available to all chats)
@@ -106,13 +116,13 @@ func TestCompleteShopWorkflow(t *testing.T) {
 			IsActive: true,
 			Stock:    nil,
 		}
-		err = shopService.CreateShopItem(ctx, item3)
+		err = shopItemRepo.Create(ctx, item3)
 		require.NoError(t, err)
 	})
 
 	// Step 4: List available items
 	t.Run("List available items", func(t *testing.T) {
-		items, err := shopService.GetShopItems(ctx, 100)
+		items, err := shopItemRepo.FindByChatID(ctx, 100)
 		require.NoError(t, err)
 		assert.Len(t, items, 3) // 2 chat-specific + 1 global
 	})
@@ -120,13 +130,13 @@ func TestCompleteShopWorkflow(t *testing.T) {
 	// Step 5: User 1 makes purchases
 	t.Run("User 1 purchases items", func(t *testing.T) {
 		// Purchase 2 swords
-		purchase1, err := shopService.PurchaseItem(ctx, 1, "SWORD", 2)
+		purchase1, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "SWORD", 2, "")
 		require.NoError(t, err)
 		assert.Equal(t, 2, purchase1.Quantity)
 		assert.Equal(t, "300", purchase1.TotalCost.String())
 
 		// Purchase 5 potions
-		purchase2, err := shopService.PurchaseItem(ctx, 1, "POTION", 5)
+		purchase2, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "POTION", 5, "")
 		require.NoError(t, err)
 		assert.Equal(t, 5, purchase2.Quantity)
 		assert.Equal(t, "250", purchase2.TotalCost.String())
@@ -145,7 +155,7 @@ func TestCompleteShopWorkflow(t *testing.T) {
 	// Step 6: User 2 tries to purchase with insufficient funds
 	t.Run("User 2 insufficient funds", func(t *testing.T) {
 		// Try to purchase 4 swords (600 cost, but only has 500)
-		_, err := shopService.PurchaseItem(ctx, 2, "SWORD", 4)
+		_, err := shopService.PurchaseItemWithIdempotency(ctx, 2, "SWORD", 4, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "insufficient balance")
 
@@ -157,7 +167,7 @@ func TestCompleteShopWorkflow(t *testing.T) {
 
 	// Step 7: Purchase global item
 	t.Run("Purchase global item", func(t *testing.T) {
-		purchase, err := shopService.PurchaseItem(ctx, 2, "BOOST", 1)
+		purchase, err := shopService.PurchaseItemWithIdempotency(ctx, 2, "BOOST", 1, "")
 		require.NoError(t, err)
 		assert.Equal(t, "XP Boost", purchase.ItemName)
 		assert.Equal(t, "200", purchase.TotalCost.String())
@@ -171,12 +181,12 @@ func TestCompleteShopWorkflow(t *testing.T) {
 	// Step 8: Check purchase history
 	t.Run("Check purchase history", func(t *testing.T) {
 		// User 1 purchases
-		purchases1, err := shopService.GetUserPurchases(ctx, 1)
+		purchases1, err := purchaseRepo.FindByUserID(ctx, 1)
 		require.NoError(t, err)
 		assert.Len(t, purchases1, 2)
 
 		// User 2 purchases
-		purchases2, err := shopService.GetUserPurchases(ctx, 2)
+		purchases2, err := purchaseRepo.FindByUserID(ctx, 2)
 		require.NoError(t, err)
 		assert.Len(t, purchases2, 1)
 	})
@@ -184,7 +194,7 @@ func TestCompleteShopWorkflow(t *testing.T) {
 	// Step 9: Out of stock scenario
 	t.Run("Out of stock scenario", func(t *testing.T) {
 		// Try to purchase more swords than available (8 remaining)
-		_, err := shopService.PurchaseItem(ctx, 1, "SWORD", 10)
+		_, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "SWORD", 10, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "insufficient stock")
 	})
@@ -199,12 +209,12 @@ func TestCompleteShopWorkflow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Try to purchase deactivated item
-		_, err = shopService.PurchaseItem(ctx, 1, "SWORD", 1)
+		_, err = shopService.PurchaseItemWithIdempotency(ctx, 1, "SWORD", 1, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not available")
 
 		// Verify it doesn't appear in the shop list
-		items, err := shopService.GetShopItems(ctx, 100)
+		items, err := shopItemRepo.FindByChatID(ctx, 100)
 		require.NoError(t, err)
 		assert.Len(t, items, 2) // Only potion and boost remain active
 	})
@@ -220,16 +230,20 @@ func TestConcurrentPurchases(t *testing.T) {
 	chatConfigRepo := inmemory.NewChatConfigRepository()
 	shopItemRepo := inmemory.NewShopItemRepository()
 	purchaseRepo := inmemory.NewPurchaseRepository()
+	discountTierRepo := inmemory.NewDiscountTierRepository()
+	idempotencyRepo := inmemory.NewInMemoryIdempotencyRepository()
 	txManager := inmemory.NewTxManager()
 	uuidGen := &mockUUIDGenerator{counter: 0}
 
-	shopService := usecase.NewShopService(
+	shopService := usecase.NewShopServiceV2(
 		shopItemRepo,
 		purchaseRepo,
 		userRepo,
 		chatConfigRepo,
+		discountTierRepo,
 		uuidGen,
 		txManager,
+		idempotencyRepo,
 	)
 
 	// Create users
@@ -268,7 +282,7 @@ func TestConcurrentPurchases(t *testing.T) {
 	// Launch 5 concurrent purchases
 	for i := 1; i <= 5; i++ {
 		go func(userID int64) {
-			_, err := shopService.PurchaseItem(ctx, userID, "LIMITED", 3)
+			_, err := shopService.PurchaseItemWithIdempotency(ctx, userID, "LIMITED", 3, "")
 			results <- result{userID: userID, err: err}
 		}(int64(i))
 	}
@@ -309,27 +323,43 @@ func TestMultiChatWorkflow(t *testing.T) {
 	chatConfigRepo := inmemory.NewChatConfigRepository()
 	shopItemRepo := inmemory.NewShopItemRepository()
 	purchaseRepo := inmemory.NewPurchaseRepository()
+	discountTierRepo := inmemory.NewDiscountTierRepository()
+	idempotencyRepo := inmemory.NewInMemoryIdempotencyRepository()
 	txManager := inmemory.NewTxManager()
 	uuidGen := &mockUUIDGenerator{counter: 0}
 
-	shopService := usecase.NewShopService(
+	shopService := usecase.NewShopServiceV2(
 		shopItemRepo,
 		purchaseRepo,
 		userRepo,
 		chatConfigRepo,
+		discountTierRepo,
 		uuidGen,
 		txManager,
+		idempotencyRepo,
 	)
 
 	// Setup different currencies for different chats
 	t.Run("Setup multiple chat configurations", func(t *testing.T) {
-		err := shopService.SetCurrencyName(ctx, 100, "Gold")
+		// Create chat config for chat 100
+		err := chatConfigRepo.Create(ctx, &entity.ChatConfig{
+			ChatID:       100,
+			CurrencyName: "Gold",
+		})
 		require.NoError(t, err)
 
-		err = shopService.SetCurrencyName(ctx, 200, "Credits")
+		// Create chat config for chat 200
+		err = chatConfigRepo.Create(ctx, &entity.ChatConfig{
+			ChatID:       200,
+			CurrencyName: "Credits",
+		})
 		require.NoError(t, err)
 
-		err = shopService.SetCurrencyName(ctx, 300, "Gems")
+		// Create chat config for chat 300
+		err = chatConfigRepo.Create(ctx, &entity.ChatConfig{
+			ChatID:       300,
+			CurrencyName: "Gems",
+		})
 		require.NoError(t, err)
 	})
 
@@ -398,17 +428,17 @@ func TestMultiChatWorkflow(t *testing.T) {
 	// Test chat isolation
 	t.Run("Test chat isolation", func(t *testing.T) {
 		// User from chat 100 can see their item + global
-		items100, err := shopService.GetShopItems(ctx, 100)
+		items100, err := shopItemRepo.FindByChatID(ctx, 100)
 		require.NoError(t, err)
 		assert.Len(t, items100, 2)
 
 		// User from chat 200 can see their item + global
-		items200, err := shopService.GetShopItems(ctx, 200)
+		items200, err := shopItemRepo.FindByChatID(ctx, 200)
 		require.NoError(t, err)
 		assert.Len(t, items200, 2)
 
 		// User from chat 300 can only see global item
-		items300, err := shopService.GetShopItems(ctx, 300)
+		items300, err := shopItemRepo.FindByChatID(ctx, 300)
 		require.NoError(t, err)
 		assert.Len(t, items300, 1)
 	})
@@ -416,18 +446,18 @@ func TestMultiChatWorkflow(t *testing.T) {
 	// Test cross-chat purchase attempts
 	t.Run("Test cross-chat purchase restrictions", func(t *testing.T) {
 		// User 1 (chat 100) tries to buy chat 200's item - should fail
-		_, err := shopService.PurchaseItem(ctx, 1, "CREDIT_BOOST", 1)
+		_, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "CREDIT_BOOST", 1, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 
 		// User 3 (chat 200) tries to buy chat 100's item - should fail
-		_, err = shopService.PurchaseItem(ctx, 3, "GOLD_SWORD", 1)
+		_, err = shopService.PurchaseItemWithIdempotency(ctx, 3, "GOLD_SWORD", 1, "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 
 		// All users can buy global item
 		for userID := int64(1); userID <= 4; userID++ {
-			purchase, err := shopService.PurchaseItem(ctx, userID, "UNIVERSAL", 1)
+			purchase, err := shopService.PurchaseItemWithIdempotency(ctx, userID, "UNIVERSAL", 1, "")
 			require.NoError(t, err)
 			assert.Equal(t, "Universal Token", purchase.ItemName)
 		}
@@ -443,16 +473,20 @@ func TestDecimalPrecisionWorkflow(t *testing.T) {
 	chatConfigRepo := inmemory.NewChatConfigRepository()
 	shopItemRepo := inmemory.NewShopItemRepository()
 	purchaseRepo := inmemory.NewPurchaseRepository()
+	discountTierRepo := inmemory.NewDiscountTierRepository()
+	idempotencyRepo := inmemory.NewInMemoryIdempotencyRepository()
 	txManager := inmemory.NewTxManager()
 	uuidGen := &mockUUIDGenerator{counter: 0}
 
-	shopService := usecase.NewShopService(
+	shopService := usecase.NewShopServiceV2(
 		shopItemRepo,
 		purchaseRepo,
 		userRepo,
 		chatConfigRepo,
+		discountTierRepo,
 		uuidGen,
 		txManager,
+		idempotencyRepo,
 	)
 
 	// Create user with precise balance
@@ -491,17 +525,17 @@ func TestDecimalPrecisionWorkflow(t *testing.T) {
 	// Make purchases and verify precision
 	t.Run("Multiple precise purchases", func(t *testing.T) {
 		// Purchase 1: Buy 3 of item 1
-		purchase1, err := shopService.PurchaseItem(ctx, 1, "ITEM1", 3)
+		purchase1, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "ITEM1", 3, "")
 		require.NoError(t, err)
 		assert.Equal(t, "370.3701", purchase1.TotalCost.String()) // 123.4567 * 3
 
 		// Purchase 2: Buy 1000 of item 2
-		purchase2, err := shopService.PurchaseItem(ctx, 1, "ITEM2", 1000)
+		purchase2, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "ITEM2", 1000, "")
 		require.NoError(t, err)
 		assert.Equal(t, "0.1", purchase2.TotalCost.String()) // 0.0001 * 1000
 
 		// Purchase 3: Buy 2 of item 3
-		purchase3, err := shopService.PurchaseItem(ctx, 1, "ITEM3", 2)
+		purchase3, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "ITEM3", 2, "")
 		require.NoError(t, err)
 		assert.Equal(t, "199.9998", purchase3.TotalCost.String()) // 99.9999 * 2
 
@@ -527,7 +561,7 @@ func TestDecimalPrecisionWorkflow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Purchase with exact balance
-		purchase, err := shopService.PurchaseItem(ctx, 1, "EXACT", 1)
+		purchase, err := shopService.PurchaseItemWithIdempotency(ctx, 1, "EXACT", 1, "")
 		require.NoError(t, err)
 		assert.Equal(t, "430.0979", purchase.TotalCost.String())
 

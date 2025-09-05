@@ -57,15 +57,24 @@ func (r *InMemoryIdempotencyRepository) Update(ctx context.Context, key *entity.
 }
 
 func (r *InMemoryIdempotencyRepository) DeleteExpired(ctx context.Context) error {
+	return r.Purge(ctx, time.Now())
+}
+
+func (r *InMemoryIdempotencyRepository) Purge(ctx context.Context, olderThan time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	now := time.Now()
 	for k, v := range r.keys {
-		if now.After(v.ExpiresAt) {
+		if v.ExpiresAt.Before(olderThan) {
 			delete(r.keys, k)
 		}
 	}
 
 	return nil
+}
+
+func (r *InMemoryIdempotencyRepository) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.keys)
 }

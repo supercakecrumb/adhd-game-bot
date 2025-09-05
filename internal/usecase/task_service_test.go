@@ -11,46 +11,8 @@ import (
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 	"github.com/supercakecrumb/adhd-game-bot/internal/ports"
 	"github.com/supercakecrumb/adhd-game-bot/internal/usecase"
+	"github.com/supercakecrumb/adhd-game-bot/internal/usecase/testhelpers"
 )
-
-type mockTaskRepo struct {
-	tasks map[string]*entity.Task
-}
-
-func (m *mockTaskRepo) Create(ctx context.Context, task *entity.Task) error {
-	m.tasks[task.ID] = task
-	return nil
-}
-
-func (m *mockTaskRepo) FindByID(ctx context.Context, id string) (*entity.Task, error) {
-	task, exists := m.tasks[id]
-	if !exists {
-		return nil, entity.ErrTaskNotFound
-	}
-	return task, nil
-}
-
-func (m *mockTaskRepo) Update(ctx context.Context, task *entity.Task) error {
-	if _, exists := m.tasks[task.ID]; !exists {
-		return entity.ErrTaskNotFound
-	}
-	m.tasks[task.ID] = task
-	return nil
-}
-
-func (m *mockTaskRepo) Delete(ctx context.Context, id string) error {
-	delete(m.tasks, id)
-	return nil
-}
-
-func (m *mockTaskRepo) FindByUser(ctx context.Context, userID int64) ([]*entity.Task, error) {
-	var result []*entity.Task
-	for _, task := range m.tasks {
-		// In real implementation we would filter by userID
-		result = append(result, task)
-	}
-	return result, nil
-}
 
 type mockUserRepo struct {
 	users map[int64]*entity.User
@@ -152,11 +114,16 @@ func (m *mockUUIDGen) New() string {
 
 func TestTaskService(t *testing.T) {
 	ctx := context.Background()
-	taskRepo := &mockTaskRepo{tasks: make(map[string]*entity.Task)}
+	taskRepo := new(testhelpers.MockTaskRepository)
 	userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1}}}
+
+	// Setup taskRepo expectations
+	taskRepo.On("Create", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+	taskRepo.On("FindByID", ctx, mock.AnythingOfType("string")).Return(nil, entity.ErrTaskNotFound)
+	taskRepo.On("FindByUser", ctx, int64(1)).Return([]*entity.Task{}, nil)
 	uuidGen := &mockUUIDGen{}
 	mockScheduler := new(mockScheduler)
-	mockIdempotencyRepo := new(mockIdempotencyRepo)
+	mockIdempotencyRepo := new(testhelpers.MockIdempotencyRepository)
 	mockTxManager := new(mockTxManager)
 
 	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
@@ -188,7 +155,8 @@ func TestTaskService(t *testing.T) {
 			StreakCount: 0,
 			Category:    "daily",
 		}
-		taskRepo.tasks[task.ID] = task
+		taskRepo.On("FindByID", ctx, "task-1").Return(task, nil)
+		taskRepo.On("Update", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
 
 		// Mock idempotency check
 		mockIdempotencyRepo.On("FindByKey", ctx, mock.AnythingOfType("string")).Return(nil, ports.ErrIdempotencyKeyNotFound).Once()

@@ -10,30 +10,68 @@ import (
 )
 
 type ShopService struct {
-	shopItemRepo   ports.ShopItemRepository
-	purchaseRepo   ports.PurchaseRepository
-	userRepo       ports.UserRepository
-	chatConfigRepo ports.ChatConfigRepository
-	uuidGen        ports.UUIDGenerator
-	txManager      ports.TxManager
+	shopItemRepo    ports.ShopItemRepository
+	purchaseRepo    ports.PurchaseRepository
+	userRepo        ports.UserRepository
+	chatConfigRepo  ports.ChatConfigRepository
+	rewardTierRepo  ports.RewardTierRepository
+	uuidGen         ports.UUIDGenerator
+	txManager       ports.TxManager
+	idempotencyRepo ports.IdempotencyRepository
+	// Deprecated fields for backward compatibility
+	legacyMode bool
 }
 
+// NewShopService creates a new ShopService instance
+// For backward compatibility, idempotencyRepo is optional (will use no-op implementation if nil)
+// NewShopService creates a new ShopService instance with backward compatibility
 func NewShopService(
 	shopItemRepo ports.ShopItemRepository,
 	purchaseRepo ports.PurchaseRepository,
 	userRepo ports.UserRepository,
 	chatConfigRepo ports.ChatConfigRepository,
-	uuidGen ports.UUIDGenerator,
-	txManager ports.TxManager,
+	args ...interface{},
 ) *ShopService {
-	return &ShopService{
-		shopItemRepo:   shopItemRepo,
-		purchaseRepo:   purchaseRepo,
-		userRepo:       userRepo,
-		chatConfigRepo: chatConfigRepo,
-		uuidGen:        uuidGen,
-		txManager:      txManager,
+	var (
+		rewardTierRepo  ports.RewardTierRepository
+		uuidGen         ports.UUIDGenerator
+		txManager       ports.TxManager
+		idempotencyRepo ports.IdempotencyRepository
+	)
+
+	// Handle backward compatibility
+	switch len(args) {
+	case 3: // Old format (uuidGen, txManager)
+		uuidGen = args[0].(ports.UUIDGenerator)
+		txManager = args[1].(ports.TxManager)
+		idempotencyRepo = &noopIdempotencyRepo{}
+	case 4: // New format (rewardTierRepo, uuidGen, txManager, idempotencyRepo)
+		rewardTierRepo = args[0].(ports.RewardTierRepository)
+		uuidGen = args[1].(ports.UUIDGenerator)
+		txManager = args[2].(ports.TxManager)
+		idempotencyRepo = args[3].(ports.IdempotencyRepository)
+	default:
+		panic("invalid number of arguments")
 	}
+	svc := &ShopService{
+		shopItemRepo:    shopItemRepo,
+		purchaseRepo:    purchaseRepo,
+		userRepo:        userRepo,
+		chatConfigRepo:  chatConfigRepo,
+		rewardTierRepo:  rewardTierRepo,
+		uuidGen:         uuidGen,
+		txManager:       txManager,
+		idempotencyRepo: idempotencyRepo,
+	}
+	
+
+	if idempotencyRepo == nil {
+		svc.legacyMode = true
+		// Initialize with no-op implementation
+		svc.idempotencyRepo = &noopIdempotencyRepo{}
+	}
+
+	return svc
 }
 
 // CreateShopItem creates a new item in the shop
@@ -61,14 +99,45 @@ func (s *ShopService) GetShopItems(ctx context.Context, chatID int64) ([]*entity
 		if item.IsActive {
 			allItems = append(allItems, item)
 		}
+		
+		// noopIdempotencyRepo provides a no-op implementation for backward compatibility
+		type noopIdempotencyRepo struct{}
+		
+		func (r *noopIdempotencyRepo) Create(ctx context.Context, key *entity.IdempotencyKey) error {
+			return nil
+		}
+		
+		func (r *noopIdempotencyRepo) FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error) {
+			return nil, nil
+		}
+		
+		func (r *noopIdempotencyRepo) Update(ctx context.Context, key *entity.IdempotencyKey) error {
+			return nil
+		}
+		
+		func (r *noopIdempotencyRepo) DeleteExpired(ctx context.Context) error {
+			return nil
+		}
+		
+		func (r *noopIdempotencyRepo) Purge(ctx context.Context, olderThan time.Time) error {
+			return nil
+		}
 	}
 
 	return allItems, nil
 }
 
-// PurchaseItem handles a user purchasing an item from the shop
-func (s *ShopService) PurchaseItem(ctx context.Context, userID int64, itemCode string, quantity int) (*entity.Purchase, error) {
+// PurchaseItem handles a user purchasing an item from the shop with idempotency
+func (s *ShopService) PurchaseItem(ctx context.Context, userID int64, itemCode string, quantity int, idempotencyKey string) (*entity.Purchase, error) {
 	var purchase *entity.Purchase
+
+	// Check idempotency first
+	if idempotencyKey != "" {
+		existing, err := s.idempotencyRepo.FindByKey(ctx, idempotencyKey)
+		if err == nil && existing != nil {
+			return nil, ports.ErrDuplicateRequest
+		}
+	}
 
 	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		// Get user

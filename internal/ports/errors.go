@@ -15,4 +15,7 @@ var (
 	ErrInsufficientFunds      = errors.New("insufficient funds")
 	ErrIdempotencyKeyExists   = errors.New("idempotency key already exists")
 	ErrIdempotencyKeyNotFound = errors.New("idempotency key not found")
+	ErrDuplicateRequest       = errors.New("duplicate request detected")
+	ErrDiscountTierExists     = errors.New("discount tier already exists")
+	ErrDiscountTierNotFound   = errors.New("discount tier not found")
 )
