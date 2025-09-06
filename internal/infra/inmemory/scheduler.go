@@ -9,27 +9,27 @@ import (
 )
 
 type InMemoryScheduler struct {
-	scheduledTasks map[string]*entity.Task
+	scheduledTasks map[string]*entity.Quest
 }
 
 func NewInMemoryScheduler() *InMemoryScheduler {
 	return &InMemoryScheduler{
-		scheduledTasks: make(map[string]*entity.Task),
+		scheduledTasks: make(map[string]*entity.Quest),
 	}
 }
 
-func (s *InMemoryScheduler) ScheduleRecurringTask(ctx context.Context, task *entity.Task) error {
-	s.scheduledTasks[task.ID] = task
+func (s *InMemoryScheduler) ScheduleRecurringTask(ctx context.Context, quest *entity.Quest) error {
+	s.scheduledTasks[quest.ID] = quest
 	return nil
 }
 
-func (s *InMemoryScheduler) CancelScheduledTask(ctx context.Context, taskID string) error {
-	delete(s.scheduledTasks, taskID)
+func (s *InMemoryScheduler) CancelScheduledTask(ctx context.Context, questID string) error {
+	delete(s.scheduledTasks, questID)
 	return nil
 }
 
-func (s *InMemoryScheduler) GetNextOccurrence(ctx context.Context, taskID string) (time.Time, error) {
-	if _, exists := s.scheduledTasks[taskID]; exists {
+func (s *InMemoryScheduler) GetNextOccurrence(ctx context.Context, questID string) (time.Time, error) {
+	if _, exists := s.scheduledTasks[questID]; exists {
 		// Simple implementation - assumes daily recurrence
 		now := time.Now()
 		next := now.Add(24 * time.Hour)

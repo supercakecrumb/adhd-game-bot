@@ -151,67 +151,38 @@ func (m *MockUUIDGenerator) New() string {
 	return args.String(0)
 }
 
-type MockTaskRepository struct {
+type MockQuestRepository struct {
 	mock.Mock
 }
 
-func (m *MockTaskRepository) Create(ctx context.Context, task *entity.Task) error {
-	args := m.Called(ctx, task)
+func (m *MockQuestRepository) Create(ctx context.Context, quest *entity.Quest) error {
+	args := m.Called(ctx, quest)
 	return args.Error(0)
 }
 
-func (m *MockTaskRepository) FindByID(ctx context.Context, id string) (*entity.Task, error) {
-	args := m.Called(ctx, id)
+func (m *MockQuestRepository) GetByID(ctx context.Context, questID string) (*entity.Quest, error) {
+	args := m.Called(ctx, questID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*entity.Task), args.Error(1)
+	return args.Get(0).(*entity.Quest), args.Error(1)
 }
 
-func (m *MockTaskRepository) FindActiveByUser(ctx context.Context, userID int64) ([]*entity.Task, error) {
-	args := m.Called(ctx, userID)
+func (m *MockQuestRepository) ListByDungeon(ctx context.Context, dungeonID string) ([]*entity.Quest, error) {
+	args := m.Called(ctx, dungeonID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*entity.Task), args.Error(1)
+	return args.Get(0).([]*entity.Quest), args.Error(1)
 }
 
-func (m *MockTaskRepository) FindWithTimers(ctx context.Context, userID int64) ([]*entity.Task, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*entity.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) Update(ctx context.Context, task *entity.Task) error {
-	args := m.Called(ctx, task)
+func (m *MockQuestRepository) Update(ctx context.Context, quest *entity.Quest) error {
+	args := m.Called(ctx, quest)
 	return args.Error(0)
 }
 
-func (m *MockTaskRepository) Delete(ctx context.Context, id string) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
-}
-
-func (m *MockTaskRepository) FindByUser(ctx context.Context, userID int64) ([]*entity.Task, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*entity.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) FindWithSchedules(ctx context.Context, userID int64) ([]*entity.Task, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*entity.Task), args.Error(1)
-}
-
-func (m *MockTaskRepository) BulkUpdate(ctx context.Context, tasks []*entity.Task) error {
-	args := m.Called(ctx, tasks)
+func (m *MockQuestRepository) Delete(ctx context.Context, questID string) error {
+	args := m.Called(ctx, questID)
 	return args.Error(0)
 }
 
@@ -241,7 +212,7 @@ type MockScheduler struct {
 	mock.Mock
 }
 
-func (m *MockScheduler) ScheduleRecurringTask(ctx context.Context, task *entity.Task) error {
+func (m *MockScheduler) ScheduleRecurringTask(ctx context.Context, task *entity.Quest) error {
 	args := m.Called(ctx, task)
 	return args.Error(0)
 }

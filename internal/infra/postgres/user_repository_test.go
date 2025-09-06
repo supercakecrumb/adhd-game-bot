@@ -57,7 +57,7 @@ func TestUserRepository(t *testing.T) {
 			ChatID:   100,
 			Username: "Test User",
 			Balance:  valueobject.NewDecimal("10.5"),
-			Timezone: "UTC",
+			TimeZone: "UTC",
 		}
 
 		err := repo.Create(context.Background(), user)

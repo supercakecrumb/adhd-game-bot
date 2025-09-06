@@ -11,7 +11,7 @@ type User struct {
 	ChatID    int64  // Chat/group this user belongs to
 	Username  string // User's display name
 	Balance   valueobject.Decimal
-	Timezone  string // IANA timezone (e.g. "America/New_York")
+	TimeZone  string // IANA timezone (e.g. "America/New_York")
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

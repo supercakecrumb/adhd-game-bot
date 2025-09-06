@@ -16,7 +16,7 @@ func NewPgScheduler(db *sql.DB) *PgScheduler {
 	return &PgScheduler{db: db}
 }
 
-func (s *PgScheduler) ScheduleRecurringTask(ctx context.Context, task *entity.Task) error {
+func (s *PgScheduler) ScheduleRecurringTask(ctx context.Context, quest *entity.Quest) error {
 	// TODO: Implement actual database scheduling logic
 	return nil
 }

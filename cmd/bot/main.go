@@ -86,7 +86,7 @@ func main() {
 				ChatID:   chatID,
 				Username: c.Sender().FirstName,
 				Balance:  valueobject.NewDecimal("0.00"),
-				Timezone: "UTC",
+				TimeZone: "UTC",
 			}
 			if err := userRepo.Create(ctx, newUser); err != nil {
 				log.Printf("Failed to create user: %v", err)
@@ -114,7 +114,7 @@ func main() {
 				ChatID:   chatID,
 				Username: c.Sender().FirstName,
 				Balance:  valueobject.NewDecimal("0.00"),
-				Timezone: "UTC",
+				TimeZone: "UTC",
 			}
 			if err := userRepo.Create(ctx, newUser); err != nil {
 				log.Printf("Failed to create user: %v", err)
@@ -161,7 +161,7 @@ func main() {
 				ChatID:   chatID,
 				Username: c.Sender().FirstName,
 				Balance:  valueobject.NewDecimal("0.00"),
-				Timezone: "UTC",
+				TimeZone: "UTC",
 			}
 			if err := userRepo.Create(ctx, newUser); err != nil {
 				log.Printf("Failed to create user: %v", err)
@@ -193,7 +193,7 @@ func main() {
 				ChatID:   chatID,
 				Username: c.Sender().FirstName,
 				Balance:  valueobject.NewDecimal("0.00"),
-				Timezone: "UTC",
+				TimeZone: "UTC",
 			}
 			if err := userRepo.Create(ctx, newUser); err != nil {
 				log.Printf("Failed to create user: %v", err)

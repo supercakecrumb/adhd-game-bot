@@ -6,24 +6,27 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
-	httpserver "github.com/supercakecrumb/adhd-game-bot/internal/infra/http"
+	http_server "github.com/supercakecrumb/adhd-game-bot/internal/infra/http"
 	"github.com/supercakecrumb/adhd-game-bot/internal/infra/postgres"
 	"github.com/supercakecrumb/adhd-game-bot/internal/usecase"
 )
 
 func main() {
-	// Database connection
-	connStr := os.Getenv("DATABASE_URL")
-	if connStr == "" {
-		connStr = "user=postgres password=password dbname=adhd_bot sslmode=disable"
+	// Load configuration
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
-	db, err := sql.Open("postgres", connStr)
+	// Connect to database
+	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
 
@@ -34,35 +37,58 @@ func main() {
 		log.Fatalf("Failed to ping database: %v", err)
 	}
 
-	// Initialize PostgreSQL repositories
+	// Initialize repositories
 	userRepo := postgres.NewUserRepository(db)
-	taskRepo := postgres.NewTaskRepository(db)
-	idempotencyRepo := postgres.NewPgIdempotencyRepository(db)
-	txManager := postgres.NewTxManager(db)
+	questRepo := postgres.NewQuestRepository(db)
+	dungeonRepo := postgres.NewDungeonRepository(db)
+	dungeonMemberRepo := postgres.NewDungeonMemberRepository(db)
 
-	// Initialize utility implementations
+	// Initialize other components
 	uuidGen := postgres.NewUUIDGenerator()
 	scheduler := postgres.NewPgScheduler(db)
+	txManager := postgres.NewTxManager(db)
+	idempotencyRepo := postgres.NewIdempotencyRepository(db)
 
-	// Initialize TaskService
-	taskService := usecase.NewTaskService(
-		taskRepo,
-		userRepo,
-		uuidGen,
-		scheduler,
-		idempotencyRepo,
-		txManager,
-	)
+	// Initialize use case services
+	questService := usecase.NewQuestService(questRepo, userRepo, uuidGen, scheduler, idempotencyRepo, txManager)
+	dungeonService := usecase.NewDungeonService(dungeonRepo, dungeonMemberRepo, userRepo, uuidGen, txManager)
 
-	// Create and start HTTP server
-	server := httpserver.NewServer(taskService)
-	port := os.Getenv("API_PORT")
+	// Initialize HTTP server
+	server := http_server.NewServer(questService, dungeonService)
+
+	// Start server
+	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("Starting API server on port %s", port)
-	if err := http.ListenAndServe(":"+port, server.Router); err != nil {
-		log.Fatalf("Failed to start API server: %v", err)
+	httpServer := &http.Server{
+		Addr:    ":" + port,
+		Handler: server.Router,
 	}
+
+	// Start server in a goroutine
+	go func() {
+		log.Printf("Server starting on port %s", port)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// Create a context with timeout for shutdown
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Attempt graceful shutdown
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited")
 }

@@ -3,120 +3,131 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
-	"github.com/supercakecrumb/adhd-game-bot/internal/ports"
 )
 
-type PgIdempotencyRepository struct {
+type IdempotencyRepository struct {
 	db *sql.DB
 }
 
-func NewPgIdempotencyRepository(db *sql.DB) *PgIdempotencyRepository {
-	return &PgIdempotencyRepository{db: db}
+func NewIdempotencyRepository(db *sql.DB) *IdempotencyRepository {
+	return &IdempotencyRepository{db: db}
 }
 
-func (r *PgIdempotencyRepository) Create(ctx context.Context, key *entity.IdempotencyKey) error {
-	query := `
-		INSERT INTO idempotency_keys (key, operation, user_id, status, result, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`
-
-	_, err := r.db.ExecContext(ctx, query,
-		key.Key,
-		key.Operation,
-		key.UserID,
-		key.Status,
-		key.Result,
-		key.CreatedAt,
-		key.ExpiresAt,
-	)
-
-	if err != nil {
-		// Check if it's a unique constraint violation
-		if isUniqueViolation(err) {
-			return ports.ErrIdempotencyKeyExists
+func (r *IdempotencyRepository) Create(ctx context.Context, key *entity.IdempotencyKey) error {
+	// Check if we're in a transaction
+	if tx, ok := GetTx(ctx); ok {
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO idempotency_keys (key, operation, user_id, status, result, created_at, completed_at, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			key.Key, key.Operation, key.UserID, key.Status, key.Result, key.CreatedAt, key.CompletedAt, key.ExpiresAt)
+		if err != nil {
+			return fmt.Errorf("failed to create idempotency key: %w", err)
 		}
-		return err
+	} else {
+		_, err := r.db.ExecContext(ctx, `
+			INSERT INTO idempotency_keys (key, operation, user_id, status, result, created_at, completed_at, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			key.Key, key.Operation, key.UserID, key.Status, key.Result, key.CreatedAt, key.CompletedAt, key.ExpiresAt)
+		if err != nil {
+			return fmt.Errorf("failed to create idempotency key: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (r *PgIdempotencyRepository) FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error) {
-	query := `
-		SELECT key, operation, user_id, status, result, created_at, completed_at, expires_at
-		FROM idempotency_keys
-		WHERE key = $1
-	`
+func (r *IdempotencyRepository) FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error) {
+	var idempotencyKey entity.IdempotencyKey
+	var createdAt time.Time
+	var completedAt *time.Time
+	var expiresAt time.Time
 
-	var idempKey entity.IdempotencyKey
-	err := r.db.QueryRowContext(ctx, query, key).Scan(
-		&idempKey.Key,
-		&idempKey.Operation,
-		&idempKey.UserID,
-		&idempKey.Status,
-		&idempKey.Result,
-		&idempKey.CreatedAt,
-		&idempKey.CompletedAt,
-		&idempKey.ExpiresAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, ports.ErrIdempotencyKeyNotFound
+	var row *sql.Row
+	if tx, ok := GetTx(ctx); ok {
+		row = tx.QueryRowContext(ctx, `
+			SELECT key, operation, user_id, status, result, created_at, completed_at, expires_at
+			FROM idempotency_keys WHERE key = $1 AND expires_at > NOW()`, key)
+	} else {
+		row = r.db.QueryRowContext(ctx, `
+			SELECT key, operation, user_id, status, result, created_at, completed_at, expires_at
+			FROM idempotency_keys WHERE key = $1 AND expires_at > NOW()`, key)
 	}
+
+	err := row.Scan(&idempotencyKey.Key, &idempotencyKey.Operation, &idempotencyKey.UserID, &idempotencyKey.Status,
+		&idempotencyKey.Result, &createdAt, &completedAt, &expiresAt)
 	if err != nil {
-		return nil, err
+		if err == sql.ErrNoRows {
+			return nil, nil // No key found or expired
+		}
+		return nil, fmt.Errorf("failed to query idempotency key: %w", err)
 	}
 
-	return &idempKey, nil
+	idempotencyKey.CreatedAt = createdAt
+	idempotencyKey.CompletedAt = completedAt
+	idempotencyKey.ExpiresAt = expiresAt
+
+	return &idempotencyKey, nil
 }
 
-func (r *PgIdempotencyRepository) Update(ctx context.Context, key *entity.IdempotencyKey) error {
-	query := `
-		UPDATE idempotency_keys
-		SET status = $2, result = $3, completed_at = $4
-		WHERE key = $1
-	`
-
-	result, err := r.db.ExecContext(ctx, query,
-		key.Key,
-		key.Status,
-		key.Result,
-		key.CompletedAt,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return ports.ErrIdempotencyKeyNotFound
+func (r *IdempotencyRepository) Update(ctx context.Context, key *entity.IdempotencyKey) error {
+	// Check if we're in a transaction
+	if tx, ok := GetTx(ctx); ok {
+		_, err := tx.ExecContext(ctx, `
+			UPDATE idempotency_keys 
+			SET status = $1, result = $2, completed_at = $3, expires_at = $4
+			WHERE key = $5`,
+			key.Status, key.Result, key.CompletedAt, key.ExpiresAt, key.Key)
+		if err != nil {
+			return fmt.Errorf("failed to update idempotency key: %w", err)
+		}
+	} else {
+		_, err := r.db.ExecContext(ctx, `
+			UPDATE idempotency_keys 
+			SET status = $1, result = $2, completed_at = $3, expires_at = $4
+			WHERE key = $5`,
+			key.Status, key.Result, key.CompletedAt, key.ExpiresAt, key.Key)
+		if err != nil {
+			return fmt.Errorf("failed to update idempotency key: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (r *PgIdempotencyRepository) DeleteExpired(ctx context.Context) error {
-	query := `DELETE FROM idempotency_keys WHERE expires_at < $1`
-	_, err := r.db.ExecContext(ctx, query, time.Now())
-	return err
+func (r *IdempotencyRepository) DeleteExpired(ctx context.Context) error {
+	// Check if we're in a transaction
+	if tx, ok := GetTx(ctx); ok {
+		_, err := tx.ExecContext(ctx, `DELETE FROM idempotency_keys WHERE expires_at <= NOW()`)
+		if err != nil {
+			return fmt.Errorf("failed to delete expired idempotency keys: %w", err)
+		}
+	} else {
+		_, err := r.db.ExecContext(ctx, `DELETE FROM idempotency_keys WHERE expires_at <= NOW()`)
+		if err != nil {
+			return fmt.Errorf("failed to delete expired idempotency keys: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func (r *PgIdempotencyRepository) Purge(ctx context.Context, olderThan time.Time) error {
-	query := `DELETE FROM idempotency_keys WHERE created_at < $1`
-	_, err := r.db.ExecContext(ctx, query, olderThan)
-	return err
-}
+func (r *IdempotencyRepository) Purge(ctx context.Context, olderThan time.Time) error {
+	// Check if we're in a transaction
+	if tx, ok := GetTx(ctx); ok {
+		_, err := tx.ExecContext(ctx, `DELETE FROM idempotency_keys WHERE created_at < $1`, olderThan)
+		if err != nil {
+			return fmt.Errorf("failed to purge idempotency keys: %w", err)
+		}
+	} else {
+		_, err := r.db.ExecContext(ctx, `DELETE FROM idempotency_keys WHERE created_at < $1`, olderThan)
+		if err != nil {
+			return fmt.Errorf("failed to purge idempotency keys: %w", err)
+		}
+	}
 
-func isUniqueViolation(err error) bool {
-	// PostgreSQL unique violation error code is 23505
-	// This is a simplified check - in production you'd want to use pq.Error
-	return err != nil && err.Error() == "pq: duplicate key value violates unique constraint"
+	return nil
 }

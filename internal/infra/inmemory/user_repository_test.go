@@ -22,7 +22,7 @@ func TestUserRepository(t *testing.T) {
 			ChatID:    100,
 			Username:  "Test User",
 			Balance:   valueobject.NewDecimal("0"),
-			Timezone:  "UTC",
+			TimeZone:  "UTC",
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}

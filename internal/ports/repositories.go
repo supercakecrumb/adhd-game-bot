@@ -16,16 +16,30 @@ type UserRepository interface {
 	Delete(ctx context.Context, id int64) error
 }
 
-type TaskRepository interface {
-	Create(ctx context.Context, task *entity.Task) error
-	FindByID(ctx context.Context, id string) (*entity.Task, error)
-	FindActiveByUser(ctx context.Context, userID int64) ([]*entity.Task, error)
-	FindWithTimers(ctx context.Context, userID int64) ([]*entity.Task, error)
-	FindWithSchedules(ctx context.Context, userID int64) ([]*entity.Task, error)
-	Update(ctx context.Context, task *entity.Task) error
-	Delete(ctx context.Context, id string) error
-	FindByUser(ctx context.Context, userID int64) ([]*entity.Task, error)
-	BulkUpdate(ctx context.Context, tasks []*entity.Task) error
+type QuestRepository interface {
+	Create(ctx context.Context, quest *entity.Quest) error
+	GetByID(ctx context.Context, questID string) (*entity.Quest, error)
+	ListByDungeon(ctx context.Context, dungeonID string) ([]*entity.Quest, error)
+	Update(ctx context.Context, quest *entity.Quest) error
+	Delete(ctx context.Context, questID string) error
+}
+
+type QuestCompletionRepository interface {
+	Insert(ctx context.Context, completion *entity.QuestCompletion) error
+	LastForUser(ctx context.Context, userID int64, questID string) (*entity.QuestCompletion, error)
+	SumAwardedForUserOnDay(ctx context.Context, userID int64, questID string, day time.Time, tz string) (valueobject.Decimal, error)
+}
+
+type DungeonRepository interface {
+	Create(ctx context.Context, dungeon *entity.Dungeon) error
+	GetByID(ctx context.Context, dungeonID string) (*entity.Dungeon, error)
+	ListByAdmin(ctx context.Context, userID int64) ([]*entity.Dungeon, error)
+}
+
+type DungeonMemberRepository interface {
+	Add(ctx context.Context, dungeonID string, userID int64) error
+	ListUsers(ctx context.Context, dungeonID string) ([]int64, error)
+	IsMember(ctx context.Context, dungeonID string, userID int64) (bool, error)
 }
 
 type ChatConfigRepository interface {
@@ -55,7 +69,7 @@ type UUIDGenerator interface {
 }
 
 type Scheduler interface {
-	ScheduleRecurringTask(ctx context.Context, task *entity.Task) error
+	ScheduleRecurringTask(ctx context.Context, task *entity.Quest) error
 	CancelScheduledTask(ctx context.Context, taskID string) error
 	GetNextOccurrence(ctx context.Context, taskID string) (time.Time, error)
 }

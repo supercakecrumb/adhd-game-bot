@@ -7,11 +7,12 @@ import (
 )
 
 type Server struct {
-	Router      *chi.Mux
-	TaskService *usecase.TaskService
+	Router         *chi.Mux
+	QuestService   *usecase.QuestService
+	DungeonService *usecase.DungeonService
 }
 
-func NewServer(taskService *usecase.TaskService) *Server {
+func NewServer(questService *usecase.QuestService, dungeonService *usecase.DungeonService) *Server {
 	r := chi.NewRouter()
 
 	// Add middleware
@@ -20,8 +21,9 @@ func NewServer(taskService *usecase.TaskService) *Server {
 	r.Use(middleware.RequestID)
 
 	server := &Server{
-		Router:      r,
-		TaskService: taskService,
+		Router:         r,
+		QuestService:   questService,
+		DungeonService: dungeonService,
 	}
 
 	server.setupRoutes()
@@ -29,16 +31,24 @@ func NewServer(taskService *usecase.TaskService) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	s.Router.Route("/api", func(r chi.Router) {
-		r.Route("/tasks", func(r chi.Router) {
-			r.Post("/", s.createTaskHandler)
-			r.Get("/{taskID}", s.getTaskHandler)
-			r.Put("/{taskID}", s.updateTaskHandler)
-			r.Post("/{taskID}/complete", s.completeTaskHandler)
+	s.Router.Route("/api/v1", func(r chi.Router) {
+		// Quest routes
+		r.Route("/dungeons/{dungeonId}/quests", func(r chi.Router) {
+			r.Get("/", s.listQuestsHandler)
 		})
 
-		r.Route("/users/{userID}/tasks", func(r chi.Router) {
-			r.Get("/", s.listTasksByUserHandler)
+		r.Route("/quests/{questId}", func(r chi.Router) {
+			r.Post("/complete", s.completeQuestHandler)
+		})
+
+		// Dungeon routes
+		r.Route("/dungeons", func(r chi.Router) {
+			r.Post("/", s.createDungeonHandler)
+			r.Route("/{dungeonId}", func(r chi.Router) {
+				r.Post("/quests", s.createQuestHandler)
+				r.Post("/members", s.addMemberHandler)
+				r.Get("/members", s.listMembersHandler)
+			})
 		})
 	})
 }

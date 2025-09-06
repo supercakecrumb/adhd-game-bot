@@ -16,7 +16,7 @@ func TestUserBuilder(t *testing.T) {
 
 		assert.Equal(t, int64(1), user.ID)
 		assert.Equal(t, int64(100), user.ChatID)
-		assert.Equal(t, "UTC", user.Timezone)
+		assert.Equal(t, "UTC", user.TimeZone)
 		assert.Equal(t, "Test User", user.Username)
 		assert.Equal(t, 100.0, user.Balance.Float64())
 	})
@@ -36,7 +36,7 @@ func TestUserBuilder(t *testing.T) {
 
 		assert.Equal(t, int64(2), user.ID)
 		assert.Equal(t, int64(200), user.ChatID)
-		assert.Equal(t, "Europe/Moscow", user.Timezone)
+		assert.Equal(t, "Europe/Moscow", user.TimeZone)
 		assert.Equal(t, "Admin User", user.Username)
 		assert.Equal(t, 500.0, user.Balance.Float64())
 		assert.Equal(t, testTime, user.CreatedAt)

@@ -53,7 +53,7 @@ func (b *UserBuilder) WithUsername(username string) *UserBuilder {
 
 func (b *UserBuilder) WithTimezone(timezone string) *UserBuilder {
 	b.With(func(u *entity.User) {
-		u.Timezone = timezone
+		u.TimeZone = timezone
 	})
 	return b
 }

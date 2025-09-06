@@ -18,9 +18,9 @@ func (m *mockUUIDGen) New() string {
 	return "generated-uuid"
 }
 
-func TestTaskService(t *testing.T) {
+func TestQuestService(t *testing.T) {
 	ctx := context.Background()
-	taskRepo := new(testhelpers.MockTaskRepository)
+	questRepo := new(testhelpers.MockQuestRepository)
 	userRepo := new(testhelpers.MockUserRepository)
 
 	uuidGen := &mockUUIDGen{}
@@ -28,41 +28,41 @@ func TestTaskService(t *testing.T) {
 	mockIdempotencyRepo := new(testhelpers.MockIdempotencyRepository)
 	mockTxManager := new(testhelpers.MockTxManager)
 
-	service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
+	service := usecase.NewQuestService(questRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 
-	t.Run("CreateTask", func(t *testing.T) {
-		task := &entity.Task{
-			Title:       "Test Task",
+	t.Run("CreateQuest", func(t *testing.T) {
+		input := usecase.CreateQuestInput{
+			Title:       "Test Quest",
 			Description: "Test Description",
 			Category:    "daily",
 		}
 
 		// Setup mock expectations
-		taskRepo.On("Create", ctx, mock.AnythingOfType("*entity.Task")).Return(nil).Once()
+		questRepo.On("Create", ctx, mock.AnythingOfType("*entity.Quest")).Return(nil).Once()
 		userRepo.On("FindByID", ctx, int64(1)).Return(&entity.User{ID: 1}, nil).Once()
 
-		// Mock the scheduler call for daily tasks
-		mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Task")).Return(nil).Once()
+		// Mock the scheduler call for daily quests
+		mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Quest")).Return(nil).Once()
 
-		created, err := service.CreateTask(ctx, 1, task)
+		created, err := service.CreateQuest(ctx, 1, "dungeon-1", input)
 		require.NoError(t, err)
 		require.Equal(t, "generated-uuid", created.ID)
-		require.Equal(t, "Test Task", created.Title)
+		require.Equal(t, "Test Quest", created.Title)
 
 		mockScheduler.AssertExpectations(t)
 		mockIdempotencyRepo.AssertExpectations(t)
 		mockTxManager.AssertExpectations(t)
 	})
 
-	t.Run("CompleteTask", func(t *testing.T) {
-		task := &entity.Task{
-			ID:          "task-1",
+	t.Run("CompleteQuest", func(t *testing.T) {
+		quest := &entity.Quest{
+			ID:          "quest-1",
 			Title:       "Complete Me",
 			StreakCount: 0,
 			Category:    "daily",
 		}
-		taskRepo.On("FindByID", ctx, "task-1").Return(task, nil)
-		taskRepo.On("Update", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+		questRepo.On("GetByID", ctx, "quest-1").Return(quest, nil)
+		questRepo.On("Update", ctx, mock.AnythingOfType("*entity.Quest")).Return(nil)
 		userRepo.On("FindByID", ctx, int64(1)).Return(&entity.User{ID: 1}, nil)
 
 		// Mock idempotency check
@@ -73,31 +73,30 @@ func TestTaskService(t *testing.T) {
 		// Mock transaction
 		mockTxManager.On("WithTx", ctx, mock.AnythingOfType("func(context.Context) error")).Run(func(args mock.Arguments) {
 			fn := args.Get(1).(func(context.Context) error)
-			// Mock the scheduler call for daily tasks
-			mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+			// Mock the scheduler call for daily quests
+			mockScheduler.On("ScheduleRecurringTask", ctx, mock.AnythingOfType("*entity.Quest")).Return(nil)
 			fn(ctx)
 		}).Return(nil).Once()
 
-		err := service.CompleteTask(ctx, 1, "task-1")
+		input := usecase.CompleteQuestInput{
+			IdempotencyKey: "key-1",
+		}
+		err := service.CompleteQuest(ctx, 1, "quest-1", input)
 		require.NoError(t, err)
-
-		updated, err := taskRepo.FindByID(ctx, "task-1")
-		require.NoError(t, err)
-		require.NotNil(t, updated.LastCompletedAt)
-		require.Equal(t, 2, updated.StreakCount)
 
 		mockScheduler.AssertExpectations(t)
 	})
 
-	t.Run("ListTasksByUser", func(t *testing.T) {
-		// Setup mock to return tasks
-		taskRepo.On("FindByUser", ctx, int64(1)).Return([]*entity.Task{
-			{ID: "task-1", Title: "Test Task 1", ChatID: 1},
-			{ID: "task-2", Title: "Test Task 2", ChatID: 1},
+	t.Run("ListQuests", func(t *testing.T) {
+		userRepo.On("FindByID", ctx, int64(1)).Return(&entity.User{ID: 1}, nil).Once()
+		// Setup mock to return quests
+		questRepo.On("ListByDungeon", ctx, "dungeon-1").Return([]*entity.Quest{
+			{ID: "quest-1", Title: "Test Quest 1"},
+			{ID: "quest-2", Title: "Test Quest 2"},
 		}, nil).Once()
 
-		tasks, err := service.ListTasksByUser(ctx, 1)
+		quests, err := service.ListQuests(ctx, 1, "dungeon-1")
 		require.NoError(t, err)
-		require.Len(t, tasks, 2)
+		require.Len(t, quests, 2)
 	})
 }

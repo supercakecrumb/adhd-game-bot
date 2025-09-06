@@ -24,7 +24,7 @@ func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO users (id, chat_id, timezone, display_name, balance, role, preferences_json)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user.ID, user.ChatID, user.Timezone, user.Username, user.Balance.String(), "member", "{}")
+			user.ID, user.ChatID, user.TimeZone, user.Username, user.Balance.String(), "member", "{}")
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
@@ -32,7 +32,7 @@ func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
 		_, err := r.db.ExecContext(ctx, `
 			INSERT INTO users (id, chat_id, timezone, display_name, balance, role, preferences_json)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user.ID, user.ChatID, user.Timezone, user.Username, user.Balance.String(), "member", "{}")
+			user.ID, user.ChatID, user.TimeZone, user.Username, user.Balance.String(), "member", "{}")
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
@@ -67,7 +67,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, 
 	}
 
 	// Map fields to user entity
-	user.Timezone = timezone
+	user.TimeZone = timezone
 	user.Username = displayName
 	user.Balance = valueobject.NewDecimal(balanceStr)
 
@@ -129,7 +129,7 @@ func (r *UserRepository) FindByChatID(ctx context.Context, chatID int64) ([]*ent
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
-		user.Timezone = timezone
+		user.TimeZone = timezone
 		user.Username = displayName
 		user.Balance = valueobject.NewDecimal(balanceStr)
 		users = append(users, &user)

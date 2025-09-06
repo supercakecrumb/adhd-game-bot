@@ -2,6 +2,8 @@ package entity
 
 import (
 	"time"
+
+	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
 )
 
 // Timer represents an active countdown or stopwatch for a task
@@ -32,9 +34,9 @@ type TimerEvent struct {
 type AchievementTier struct {
 	ID          string
 	Name        string
-	StreakCount int     // Required streak count
-	Reward      Reward  // Base reward
-	Multiplier  Decimal // Optional multiplier
+	StreakCount int                 // Required streak count
+	Reward      valueobject.Decimal // Base reward
+	Multiplier  valueobject.Decimal // Optional multiplier
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
