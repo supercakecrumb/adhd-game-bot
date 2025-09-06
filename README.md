@@ -170,8 +170,8 @@ Content-Type: application/json
 
 {
   "chat_id": 123456789,
-  "title": "Morning Meditation",
-  "description": "10 minutes of mindfulness",
+  "title": "Morning Excercise",
+  "description": "10 minutes of good stretches",
   "category": "daily",
   "difficulty": "easy",
   "schedule_json": "{}",
