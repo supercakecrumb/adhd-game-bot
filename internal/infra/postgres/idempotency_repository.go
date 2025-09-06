@@ -109,6 +109,12 @@ func (r *PgIdempotencyRepository) DeleteExpired(ctx context.Context) error {
 	return err
 }
 
+func (r *PgIdempotencyRepository) Purge(ctx context.Context, olderThan time.Time) error {
+	query := `DELETE FROM idempotency_keys WHERE created_at < $1`
+	_, err := r.db.ExecContext(ctx, query, olderThan)
+	return err
+}
+
 func isUniqueViolation(err error) bool {
 	// PostgreSQL unique violation error code is 23505
 	// This is a simplified check - in production you'd want to use pq.Error

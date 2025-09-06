@@ -43,6 +43,7 @@ A Telegram bot designed to help individuals with ADHD manage their daily routine
    ```
 
 4. The bot should now be running and connected to Telegram (if using a valid token).
+   The API service will be available at http://localhost:8080
 
 ## Database Migrations
 
@@ -75,9 +76,17 @@ To build the bot locally without Docker:
    ```bash
    go build -o adhd-bot cmd/bot/main.go
    ```
-4. Run the bot:
+4. Build the API:
+   ```bash
+   go build -o adhd-api cmd/api/main.go
+   ```
+5. Run the bot:
    ```bash
    ./adhd-bot
+   ```
+6. Run the API (in a separate terminal):
+   ```bash
+   ./adhd-api
    ```
 
 Note: You'll need to set up a PostgreSQL database separately for local development.
@@ -88,6 +97,43 @@ Note: You'll need to set up a PostgreSQL database separately for local developme
 - `/shop` - View available items in the shop
 - `/buy <item_code>` - Purchase an item from the shop
 - `/balance` - Check your current balance
+
+## API Endpoints
+
+The API service provides RESTful endpoints for task management:
+
+### Tasks
+
+- `POST /api/tasks?user_id={user_id}` - Create a new task
+- `GET /api/tasks/{task_id}` - Get a specific task
+- `PUT /api/tasks/{task_id}` - Update a task
+- `POST /api/tasks/{task_id}/complete?user_id={user_id}` - Mark a task as complete
+
+### User Tasks
+
+- `GET /api/users/{user_id}/tasks` - List all tasks for a user
+
+### Task Data Structure
+
+When creating or updating tasks, use the following JSON structure:
+
+```json
+{
+  "chat_id": 123456789,
+  "title": "Example Task",
+  "description": "This is an example task",
+  "category": "daily",
+  "difficulty": "medium",
+  "schedule_json": "{}",
+  "base_duration": 3600,
+  "grace_period": 300,
+  "cooldown": 0,
+  "reward_curve_json": "{}",
+  "streak_enabled": true,
+  "status": "active",
+  "time_zone": "UTC"
+}
+```
 
 ## Architecture
 

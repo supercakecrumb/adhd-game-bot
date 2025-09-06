@@ -16,6 +16,9 @@ COPY . .
 # Build the bot binary
 RUN go build -o adhd-bot cmd/bot/main.go
 
+# Build the API binary
+RUN go build -o adhd-api cmd/api/main.go
+
 # Build the migration tool
 RUN go build -o migrate cmd/migrate/main.go
 
@@ -30,13 +33,14 @@ WORKDIR /root/
 
 # Copy the binaries from the builder stage
 COPY --from=builder /app/adhd-bot .
+COPY --from=builder /app/adhd-api .
 COPY --from=builder /app/migrate .
 
 # Copy migration files
 COPY --from=builder /app/internal/infra/postgres/migrations ./internal/infra/postgres/migrations
 
-# Expose the port the app runs on (if needed)
-# EXPOSE 8080
+# Expose the port the API runs on
+EXPOSE 8080
 
 # Command to run the executable
 CMD ["./adhd-bot"]
