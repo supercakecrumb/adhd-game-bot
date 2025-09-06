@@ -237,6 +237,25 @@ func (m *MockIdempotencyRepository) Update(ctx context.Context, key *entity.Idem
 	return args.Error(0)
 }
 
+type MockScheduler struct {
+	mock.Mock
+}
+
+func (m *MockScheduler) ScheduleRecurringTask(ctx context.Context, task *entity.Task) error {
+	args := m.Called(ctx, task)
+	return args.Error(0)
+}
+
+func (m *MockScheduler) CancelScheduledTask(ctx context.Context, taskID string) error {
+	args := m.Called(ctx, taskID)
+	return args.Error(0)
+}
+
+func (m *MockScheduler) GetNextOccurrence(ctx context.Context, taskID string) (time.Time, error) {
+	args := m.Called(ctx, taskID)
+	return args.Get(0).(time.Time), args.Error(1)
+}
+
 func (m *MockIdempotencyRepository) DeleteExpired(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)

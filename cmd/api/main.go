@@ -18,7 +18,7 @@ func main() {
 	// Database connection
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		connStr = "user=postgres dbname=adhd_bot sslmode=disable"
+		connStr = "user=postgres password=password dbname=adhd_bot sslmode=disable"
 	}
 
 	db, err := sql.Open("postgres", connStr)

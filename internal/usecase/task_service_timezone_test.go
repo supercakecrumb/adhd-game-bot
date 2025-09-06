@@ -18,11 +18,11 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 
 	t.Run("Task with timezone uses local time", func(t *testing.T) {
 		taskRepo := new(testhelpers.MockTaskRepository)
-		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1, ChatID: 1}}}
-		uuidGen := &mockUUIDGen{}
-		mockScheduler := new(mockScheduler)
+		userRepo := new(testhelpers.MockUserRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		mockScheduler := new(testhelpers.MockScheduler)
 		mockIdempotencyRepo := new(testhelpers.MockIdempotencyRepository)
-		mockTxManager := new(mockTxManager)
+		mockTxManager := new(testhelpers.MockTxManager)
 
 		task := &entity.Task{
 			ID:          "tz-task",
@@ -34,6 +34,7 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 
 		taskRepo.On("FindByID", ctx, "tz-task").Return(task, nil)
 		taskRepo.On("Update", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+		userRepo.On("FindByID", ctx, int64(1)).Return(&entity.User{ID: 1, ChatID: 1}, nil)
 
 		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 
@@ -69,11 +70,11 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 
 	t.Run("Task without timezone uses UTC", func(t *testing.T) {
 		taskRepo := new(testhelpers.MockTaskRepository)
-		userRepo := &mockUserRepo{users: map[int64]*entity.User{1: {ID: 1, ChatID: 1}}}
-		uuidGen := &mockUUIDGen{}
-		mockScheduler := new(mockScheduler)
+		userRepo := new(testhelpers.MockUserRepository)
+		uuidGen := new(testhelpers.MockUUIDGenerator)
+		mockScheduler := new(testhelpers.MockScheduler)
 		mockIdempotencyRepo := new(testhelpers.MockIdempotencyRepository)
-		mockTxManager := new(mockTxManager)
+		mockTxManager := new(testhelpers.MockTxManager)
 
 		task := &entity.Task{
 			ID:          "no-tz-task",
@@ -84,6 +85,7 @@ func TestTimezoneAwareScheduling(t *testing.T) {
 
 		taskRepo.On("FindByID", ctx, "no-tz-task").Return(task, nil)
 		taskRepo.On("Update", ctx, mock.AnythingOfType("*entity.Task")).Return(nil)
+		userRepo.On("FindByID", ctx, int64(1)).Return(&entity.User{ID: 1, ChatID: 1}, nil)
 
 		service := usecase.NewTaskService(taskRepo, userRepo, uuidGen, mockScheduler, mockIdempotencyRepo, mockTxManager)
 

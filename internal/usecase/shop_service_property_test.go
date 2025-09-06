@@ -32,9 +32,9 @@ func TestShopService_BalanceNeverNegative(t *testing.T) {
 		uuidGen := new(testhelpers.MockUUIDGenerator)
 		txManager := new(testhelpers.MockTxManager)
 
-		service := usecase.NewShopService(
+		service := usecase.NewShopServiceV2(
 			shopItemRepo, purchaseRepo, userRepo,
-			chatConfigRepo, uuidGen, txManager,
+			chatConfigRepo, nil, uuidGen, txManager, nil,
 		)
 
 		// Create test data
@@ -73,7 +73,7 @@ func TestShopService_BalanceNeverNegative(t *testing.T) {
 			}).Return(nil).Once()
 
 		// Execute purchase
-		_, err := service.PurchaseItem(ctx, 1, "TEST", 1)
+		_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", 1, "")
 
 		// Property check: if purchase succeeded, balance should not be negative
 		if err == nil {
@@ -108,9 +108,9 @@ func TestShopService_StockNeverNegative(t *testing.T) {
 		uuidGen := new(testhelpers.MockUUIDGenerator)
 		txManager := new(testhelpers.MockTxManager)
 
-		service := usecase.NewShopService(
+		service := usecase.NewShopServiceV2(
 			shopItemRepo, purchaseRepo, userRepo,
-			chatConfigRepo, uuidGen, txManager,
+			chatConfigRepo, nil, uuidGen, txManager, nil,
 		)
 
 		// Create test data
@@ -149,7 +149,7 @@ func TestShopService_StockNeverNegative(t *testing.T) {
 			}).Return(nil).Once()
 
 		// Execute purchase
-		_, err := service.PurchaseItem(ctx, 1, "TEST", int(quantity))
+		_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", int(quantity), "")
 
 		// Property check: if purchase succeeded, stock should not be negative
 		if err == nil {
@@ -184,9 +184,9 @@ func TestShopService_TotalCostCalculation(t *testing.T) {
 		uuidGen := new(testhelpers.MockUUIDGenerator)
 		txManager := new(testhelpers.MockTxManager)
 
-		service := usecase.NewShopService(
+		service := usecase.NewShopServiceV2(
 			shopItemRepo, purchaseRepo, userRepo,
-			chatConfigRepo, uuidGen, txManager,
+			chatConfigRepo, nil, uuidGen, txManager, nil,
 		)
 
 		// Calculate expected total
@@ -229,7 +229,7 @@ func TestShopService_TotalCostCalculation(t *testing.T) {
 			}).Return(nil).Once()
 
 		// Execute purchase
-		_, err := service.PurchaseItem(ctx, 1, "TEST", int(quantity))
+		_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", int(quantity), "")
 		require.NoError(t, err)
 
 		// Property check: total cost should equal price * quantity
@@ -261,9 +261,9 @@ func TestShopService_LargeQuantityPurchases(t *testing.T) {
 		uuidGen := new(testhelpers.MockUUIDGenerator)
 		txManager := new(testhelpers.MockTxManager)
 
-		service := usecase.NewShopService(
+		service := usecase.NewShopServiceV2(
 			shopItemRepo, purchaseRepo, userRepo,
-			chatConfigRepo, uuidGen, txManager,
+			chatConfigRepo, nil, uuidGen, txManager, nil,
 		)
 
 		// Calculate expected total
@@ -307,7 +307,7 @@ func TestShopService_LargeQuantityPurchases(t *testing.T) {
 			}).Return(nil).Once()
 
 		// Execute purchase
-		_, err := service.PurchaseItem(ctx, 1, "TEST", int(quantity))
+		_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", int(quantity), "")
 		if err != nil {
 			return false
 		}
@@ -341,9 +341,9 @@ func TestShopService_DecimalPrecision(t *testing.T) {
 		uuidGen := new(testhelpers.MockUUIDGenerator)
 		txManager := new(testhelpers.MockTxManager)
 
-		service := usecase.NewShopService(
+		service := usecase.NewShopServiceV2(
 			shopItemRepo, purchaseRepo, userRepo,
-			chatConfigRepo, uuidGen, txManager,
+			chatConfigRepo, nil, uuidGen, txManager, nil,
 		)
 
 		// Calculate expected total with precise decimal math
@@ -387,7 +387,7 @@ func TestShopService_DecimalPrecision(t *testing.T) {
 			}).Return(nil).Once()
 
 		// Execute purchase
-		_, err := service.PurchaseItem(ctx, 1, "TEST", int(quantity))
+		_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", int(quantity), "")
 		if err != nil {
 			return false
 		}
@@ -422,9 +422,9 @@ func TestShopService_IdempotentPurchase(t *testing.T) {
 		uuidGen := new(testhelpers.MockUUIDGenerator)
 		txManager := new(testhelpers.MockTxManager)
 
-		service := usecase.NewShopService(
+		service := usecase.NewShopServiceV2(
 			shopItemRepo, purchaseRepo, userRepo,
-			chatConfigRepo, uuidGen, txManager,
+			chatConfigRepo, nil, uuidGen, txManager, nil,
 		)
 
 		// Create test data
@@ -459,13 +459,13 @@ func TestShopService_IdempotentPurchase(t *testing.T) {
 			}).Return(nil).Twice() // Expect two calls but same mocks
 
 		// Execute first purchase
-		_, err := service.PurchaseItem(ctx, 1, "TEST", 1)
+		_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", 1, "")
 		if err != nil {
 			return false
 		}
 
 		// Execute second identical purchase
-		_, err = service.PurchaseItem(ctx, 1, "TEST", 1)
+		_, err = service.PurchaseItemWithIdempotency(ctx, 1, "TEST", 1, "")
 		if err != nil {
 			return false
 		}
@@ -498,9 +498,9 @@ func TestShopService_EdgeCases(t *testing.T) {
 				uuidGen := new(testhelpers.MockUUIDGenerator)
 				txManager := new(testhelpers.MockTxManager)
 
-				service := usecase.NewShopService(
+				service := usecase.NewShopServiceV2(
 					shopItemRepo, purchaseRepo, userRepo,
-					chatConfigRepo, uuidGen, txManager,
+					chatConfigRepo, nil, uuidGen, txManager, nil,
 				)
 
 				user := &entity.User{
@@ -533,7 +533,7 @@ func TestShopService_EdgeCases(t *testing.T) {
 						fn(ctx)
 					}).Return(nil).Once()
 
-				_, err := service.PurchaseItem(ctx, 1, "TEST", 1)
+				_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", 1, "")
 				require.NoError(t, err)
 			},
 		},
@@ -549,9 +549,9 @@ func TestShopService_EdgeCases(t *testing.T) {
 				uuidGen := new(testhelpers.MockUUIDGenerator)
 				txManager := new(testhelpers.MockTxManager)
 
-				service := usecase.NewShopService(
+				service := usecase.NewShopServiceV2(
 					shopItemRepo, purchaseRepo, userRepo,
-					chatConfigRepo, uuidGen, txManager,
+					chatConfigRepo, nil, uuidGen, txManager, nil,
 				)
 
 				// Create test data for mocks
@@ -574,7 +574,7 @@ func TestShopService_EdgeCases(t *testing.T) {
 					}).Return(nil).Maybe()
 
 				// Should fail validation before any repository calls
-				_, err := service.PurchaseItem(ctx, 1, "TEST", 0)
+				_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", 0, "")
 				require.Error(t, err)
 			},
 		},
@@ -590,9 +590,9 @@ func TestShopService_EdgeCases(t *testing.T) {
 				uuidGen := new(testhelpers.MockUUIDGenerator)
 				txManager := new(testhelpers.MockTxManager)
 
-				service := usecase.NewShopService(
+				service := usecase.NewShopServiceV2(
 					shopItemRepo, purchaseRepo, userRepo,
-					chatConfigRepo, uuidGen, txManager,
+					chatConfigRepo, nil, uuidGen, txManager, nil,
 				)
 
 				user := &entity.User{
@@ -622,7 +622,7 @@ func TestShopService_EdgeCases(t *testing.T) {
 						fn(ctx)
 					}).Return(nil).Once()
 
-				_, err := service.PurchaseItem(ctx, 1, "TEST", 1)
+				_, err := service.PurchaseItemWithIdempotency(ctx, 1, "TEST", 1, "")
 				require.Error(t, err)
 			},
 		},

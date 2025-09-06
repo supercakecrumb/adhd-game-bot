@@ -53,16 +53,11 @@ func TestUserRepository(t *testing.T) {
 
 	t.Run("Create and find user", func(t *testing.T) {
 		user := &entity.User{
-			ID:          1,
-			ChatID:      100,
-			Role:        "member",
-			TimeZone:    "UTC",
-			DisplayName: "Test User",
-			Balance:     valueobject.NewDecimal("10.5"),
-			Preferences: entity.UserPreferences{
-				EditIntervalSec: 300,
-				NotifyOnAward:   true,
-			},
+			ID:       1,
+			ChatID:   100,
+			Username: "Test User",
+			Balance:  valueobject.NewDecimal("10.5"),
+			Timezone: "UTC",
 		}
 
 		err := repo.Create(context.Background(), user)
@@ -72,7 +67,7 @@ func TestUserRepository(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, user.ID, found.ID)
 		require.Equal(t, user.ChatID, found.ChatID)
-		require.Equal(t, user.DisplayName, found.DisplayName)
+		require.Equal(t, user.Username, found.Username)
 		require.Equal(t, 10.5, found.Balance.Float64())
 	})
 

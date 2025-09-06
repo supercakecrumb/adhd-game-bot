@@ -122,7 +122,7 @@ func TestCompleteShopWorkflow(t *testing.T) {
 
 	// Step 4: List available items
 	t.Run("List available items", func(t *testing.T) {
-		items, err := shopItemRepo.FindByChatID(ctx, 100)
+		items, err := shopService.GetShopItems(ctx, 100)
 		require.NoError(t, err)
 		assert.Len(t, items, 3) // 2 chat-specific + 1 global
 	})
@@ -428,17 +428,17 @@ func TestMultiChatWorkflow(t *testing.T) {
 	// Test chat isolation
 	t.Run("Test chat isolation", func(t *testing.T) {
 		// User from chat 100 can see their item + global
-		items100, err := shopItemRepo.FindByChatID(ctx, 100)
+		items100, err := shopService.GetShopItems(ctx, 100)
 		require.NoError(t, err)
 		assert.Len(t, items100, 2)
 
 		// User from chat 200 can see their item + global
-		items200, err := shopItemRepo.FindByChatID(ctx, 200)
+		items200, err := shopService.GetShopItems(ctx, 200)
 		require.NoError(t, err)
 		assert.Len(t, items200, 2)
 
 		// User from chat 300 can only see global item
-		items300, err := shopItemRepo.FindByChatID(ctx, 300)
+		items300, err := shopService.GetShopItems(ctx, 300)
 		require.NoError(t, err)
 		assert.Len(t, items300, 1)
 	})
