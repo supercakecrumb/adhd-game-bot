@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
@@ -20,26 +19,23 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 }
 
 func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
-	prefs, err := json.Marshal(user.Preferences)
-	if err != nil {
-		return fmt.Errorf("failed to marshal preferences: %w", err)
-	}
-
 	// Check if we're in a transaction
 	if tx, ok := GetTx(ctx); ok {
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO users (id, chat_id, role, timezone, display_name, preferences_json, balance)
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO users (id, chat_id, timezone, display_name, balance, role, preferences_json)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user.ID, user.ChatID, user.Role, user.TimeZone, user.DisplayName, prefs, user.Balance.String())
+			user.ID, user.ChatID, user.Timezone, user.Username, user.Balance.String(), "member", "{}")
+		if err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
 	} else {
-		_, err = r.db.ExecContext(ctx, `
-			INSERT INTO users (id, chat_id, role, timezone, display_name, preferences_json, balance)
+		_, err := r.db.ExecContext(ctx, `
+			INSERT INTO users (id, chat_id, timezone, display_name, balance, role, preferences_json)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user.ID, user.ChatID, user.Role, user.TimeZone, user.DisplayName, prefs, user.Balance.String())
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+			user.ID, user.ChatID, user.Timezone, user.Username, user.Balance.String(), "member", "{}")
+		if err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
 	}
 
 	return nil
@@ -47,21 +43,22 @@ func (r *UserRepository) Create(ctx context.Context, user *entity.User) error {
 
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, error) {
 	var user entity.User
-	var prefsJSON []byte
 	var balanceStr string
+	var role, timezone, displayName, preferencesJSON string
+	var createdAt, updatedAt interface{} // We'll ignore these for now
 
 	var row *sql.Row
 	if tx, ok := GetTx(ctx); ok {
 		row = tx.QueryRowContext(ctx, `
-			SELECT id, chat_id, role, timezone, display_name, preferences_json, balance
+			SELECT id, chat_id, role, timezone, display_name, preferences_json, balance, created_at, updated_at
 			FROM users WHERE id = $1`, id)
 	} else {
 		row = r.db.QueryRowContext(ctx, `
-			SELECT id, chat_id, role, timezone, display_name, preferences_json, balance
+			SELECT id, chat_id, role, timezone, display_name, preferences_json, balance, created_at, updated_at
 			FROM users WHERE id = $1`, id)
 	}
 
-	err := row.Scan(&user.ID, &user.ChatID, &user.Role, &user.TimeZone, &user.DisplayName, &prefsJSON, &balanceStr)
+	err := row.Scan(&user.ID, &user.ChatID, &role, &timezone, &displayName, &preferencesJSON, &balanceStr, &createdAt, &updatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ports.ErrUserNotFound
@@ -69,12 +66,9 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*entity.User, 
 		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
 
-	// Unmarshal preferences
-	if err := json.Unmarshal(prefsJSON, &user.Preferences); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal preferences: %w", err)
-	}
-
-	// Parse balance
+	// Map fields to user entity
+	user.Timezone = timezone
+	user.Username = displayName
 	user.Balance = valueobject.NewDecimal(balanceStr)
 
 	return &user, nil
@@ -114,4 +108,36 @@ func (r *UserRepository) Delete(ctx context.Context, id int64) error {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 	return nil
+}
+
+func (r *UserRepository) FindByChatID(ctx context.Context, chatID int64) ([]*entity.User, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, chat_id, role, timezone, display_name, preferences_json, balance, created_at, updated_at
+		FROM users WHERE chat_id = $1`, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users by chat_id: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*entity.User
+	for rows.Next() {
+		var user entity.User
+		var balanceStr string
+		var role, timezone, displayName, preferencesJSON string
+		var createdAt, updatedAt interface{} // We'll ignore these for now
+		err := rows.Scan(&user.ID, &user.ChatID, &role, &timezone, &displayName, &preferencesJSON, &balanceStr, &createdAt, &updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+		user.Timezone = timezone
+		user.Username = displayName
+		user.Balance = valueobject.NewDecimal(balanceStr)
+		users = append(users, &user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over user rows: %w", err)
+	}
+
+	return users, nil
 }

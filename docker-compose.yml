@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: adhd_bot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  bot:
+    build: .
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATABASE_URL: postgres://postgres:password@db:5432/adhd_bot?sslmode=disable
+    depends_on:
+      - db
+    restart: unless-stopped
+    # Command can be overridden to run migrations
+    # Example: docker-compose run bot ./migrate
+
+volumes:
+  postgres_data:

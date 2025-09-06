@@ -12,7 +12,10 @@ import (
 
 func main() {
 	// Connect to PostgreSQL database
-	connStr := "user=postgres dbname=adhd_bot sslmode=disable"
+	connStr := os.Getenv("DATABASE_URL")
+	if connStr == "" {
+		connStr = "user=postgres dbname=adhd_bot sslmode=disable"
+	}
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
@@ -50,23 +53,12 @@ func main() {
 				log.Fatalf("Failed to read migration file: %v", err)
 			}
 
-			tx, err := db.Begin()
-			if err != nil {
-				log.Fatalf("Failed to begin transaction: %v", err)
-			}
-
-			if _, err := tx.Exec(string(migrationSQL)); err != nil {
-				tx.Rollback()
+			if _, err := db.Exec(string(migrationSQL)); err != nil {
 				log.Fatalf("Failed to apply migration %s: %v", file, err)
 			}
 
-			if _, err := tx.Exec("INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
-				tx.Rollback()
+			if _, err := db.Exec("INSERT INTO schema_migrations (version) VALUES ($1)", version); err != nil {
 				log.Fatalf("Failed to record migration: %v", err)
-			}
-
-			if err := tx.Commit(); err != nil {
-				log.Fatalf("Failed to commit migration: %v", err)
 			}
 		}
 	}

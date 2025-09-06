@@ -1,8 +1,10 @@
 module github.com/supercakecrumb/adhd-game-bot
 
-go 1.21
+go 1.25.0
 
 require (
 	github.com/lib/pq v1.10.9
 	gopkg.in/telebot.v3 v3.1.3
 )
+
+require github.com/shopspring/decimal v1.4.0 // indirect

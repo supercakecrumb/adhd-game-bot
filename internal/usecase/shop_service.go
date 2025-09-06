@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/entity"
 	"github.com/supercakecrumb/adhd-game-bot/internal/domain/valueobject"
@@ -63,7 +64,6 @@ func NewShopService(
 		txManager:       txManager,
 		idempotencyRepo: idempotencyRepo,
 	}
-	
 
 	if idempotencyRepo == nil {
 		svc.legacyMode = true
@@ -99,32 +99,33 @@ func (s *ShopService) GetShopItems(ctx context.Context, chatID int64) ([]*entity
 		if item.IsActive {
 			allItems = append(allItems, item)
 		}
-		
-		// noopIdempotencyRepo provides a no-op implementation for backward compatibility
-		type noopIdempotencyRepo struct{}
-		
-		func (r *noopIdempotencyRepo) Create(ctx context.Context, key *entity.IdempotencyKey) error {
-			return nil
-		}
-		
-		func (r *noopIdempotencyRepo) FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error) {
-			return nil, nil
-		}
-		
-		func (r *noopIdempotencyRepo) Update(ctx context.Context, key *entity.IdempotencyKey) error {
-			return nil
-		}
-		
-		func (r *noopIdempotencyRepo) DeleteExpired(ctx context.Context) error {
-			return nil
-		}
-		
-		func (r *noopIdempotencyRepo) Purge(ctx context.Context, olderThan time.Time) error {
-			return nil
-		}
+
 	}
 
 	return allItems, nil
+}
+
+// noopIdempotencyRepo provides a no-op implementation for backward compatibility
+type noopIdempotencyRepo struct{}
+
+func (r *noopIdempotencyRepo) Create(ctx context.Context, key *entity.IdempotencyKey) error {
+	return nil
+}
+
+func (r *noopIdempotencyRepo) FindByKey(ctx context.Context, key string) (*entity.IdempotencyKey, error) {
+	return nil, nil
+}
+
+func (r *noopIdempotencyRepo) Update(ctx context.Context, key *entity.IdempotencyKey) error {
+	return nil
+}
+
+func (r *noopIdempotencyRepo) DeleteExpired(ctx context.Context) error {
+	return nil
+}
+
+func (r *noopIdempotencyRepo) Purge(ctx context.Context, olderThan time.Time) error {
+	return nil
 }
 
 // PurchaseItem handles a user purchasing an item from the shop with idempotency

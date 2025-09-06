@@ -28,8 +28,8 @@ type TimerEvent struct {
 	Metadata  map[string]interface{}
 }
 
-// RewardTier defines achievement levels for task completion
-type RewardTier struct {
+// AchievementTier defines achievement levels for task completion
+type AchievementTier struct {
 	ID          string
 	Name        string
 	StreakCount int     // Required streak count
