@@ -1,20 +1,49 @@
-# ADHD Game Bot
+# ADHD Game Bot 🎮
 
-A Telegram bot designed to help individuals with ADHD manage their daily routines through gamification.
+> Transform ADHD task management into an engaging game experience
 
-## Features
+[![Go Version](https://img.shields.io/badge/Go-1.25.0-blue.svg)](https://golang.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://core.telegram.org/bots)
 
-- Task management with rewards
-- Shop system for purchasing items
-- Balance tracking
-- Multi-chat support
+ADHD Game Bot is a sophisticated Telegram-based platform that gamifies daily task management for individuals with ADHD. By leveraging behavioral psychology and modern cloud architecture, we're making ADHD management engaging, rewarding, and sustainable.
 
-## Prerequisites
+## 🌟 Key Features
+
+### For Users
+- **🎯 Smart Task Management**: Categorized tasks (daily, weekly, ad-hoc) with intelligent scheduling
+- **🏆 Gamification Engine**: Earn points, maintain streaks, unlock achievements
+- **🛍️ Virtual Shop**: Spend earned points on motivating rewards
+- **⏱️ Flexible Timers**: Countdown and stopwatch modes with pause/resume
+- **🌍 Multi-timezone Support**: Works seamlessly across time zones
+- **👥 Group Support**: Use in private chats or support groups
+
+### For Developers
+- **🏗️ Clean Architecture**: Domain-driven design with clear separation of concerns
+- **🔄 RESTful API**: Complete API for external integrations
+- **🔒 Idempotent Operations**: Safe transaction handling
+- **📊 Comprehensive Testing**: Unit and integration test coverage
+- **🐳 Docker Ready**: Easy deployment with Docker Compose
+- **📈 Scalable Design**: Built to handle millions of users
+
+## 📚 Documentation
+
+- **[Investor Pitch](INVESTOR_PITCH.md)** - Business overview and investment opportunity
+- **[Technical Overview](TECHNICAL_OVERVIEW.md)** - Detailed technical documentation
+- **[User Guide](USER_GUIDE.md)** - Complete guide for end users
+- **[API Documentation](#api-endpoints)** - REST API reference
+
+## 🚀 Quick Start
+
+### Prerequisites
 
 - Docker and Docker Compose
-- A Telegram bot token (obtained from [@BotFather](https://t.me/BotFather))
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- PostgreSQL 13+ (if running locally)
+- Go 1.25.0+ (for local development)
 
-## Building and Running
+### Running with Docker (Recommended)
 
 1. Clone the repository:
    ```bash
@@ -45,104 +74,263 @@ A Telegram bot designed to help individuals with ADHD manage their daily routine
 4. The bot should now be running and connected to Telegram (if using a valid token).
    The API service will be available at http://localhost:8080
 
-## Database Migrations
+## 🗄️ Database Setup
 
-Before the bot can function properly, you need to apply the database migrations:
+### Running Migrations
+
+Before first use, apply database migrations:
 
 ```bash
-# Run migrations using docker-compose
+# Using Docker Compose
 docker-compose run --rm bot ./migrate
+
+# Or locally
+./scripts/migrate.sh
 ```
 
-The `--rm` flag ensures that the container is removed after it finishes running, preventing orphan containers.
+Migrations are located in `internal/infra/postgres/migrations/` and run sequentially.
 
-The migration tool will apply all pending migrations to set up the database schema. After running the migrations, you can start the bot normally:
-```bash
-docker-compose up -d
-```
+## 💻 Development
 
-The migration files are located in `internal/infra/postgres/migrations/` and follow a sequential numbering scheme.
+### Local Development Setup
 
-## Development
-
-To build the bot locally without Docker:
-
-1. Ensure you have Go 1.25.0+ installed
-2. Install dependencies:
+1. **Install Go 1.25.0+**
    ```bash
+   # Check version
+   go version
+   ```
+
+2. **Clone and Install Dependencies**
+   ```bash
+   git clone <repository-url>
+   cd adhd-game-bot
    go mod download
    ```
-3. Build the bot:
+
+3. **Set Environment Variables**
    ```bash
+   export TELEGRAM_BOT_TOKEN=your_token_here
+   export DATABASE_URL=postgres://user:pass@localhost/adhd_bot
+   ```
+
+4. **Build and Run**
+   ```bash
+   # Build
    go build -o adhd-bot cmd/bot/main.go
-   ```
-4. Build the API:
-   ```bash
    go build -o adhd-api cmd/api/main.go
-   ```
-5. Run the bot:
-   ```bash
-   ./adhd-bot
-   ```
-6. Run the API (in a separate terminal):
-   ```bash
-   ./adhd-api
+   
+   # Run
+   ./adhd-bot  # Terminal 1
+   ./adhd-api  # Terminal 2
    ```
 
-Note: You'll need to set up a PostgreSQL database separately for local development.
+### Running Tests
 
-## Bot Commands
+```bash
+# Run all tests
+go test ./...
 
-- `/start` - Start the bot and register as a new user
-- `/shop` - View available items in the shop
-- `/buy <item_code>` - Purchase an item from the shop
-- `/balance` - Check your current balance
+# Run with coverage
+go test -cover ./...
 
-## API Endpoints
+# Run specific package tests
+go test ./internal/usecase/...
+```
 
-The API service provides RESTful endpoints for task management:
+## 🤖 Bot Commands
 
-### Tasks
+### Available Commands
+- `/start` - Initialize the bot and create your profile
+- `/shop` - Browse available rewards
+- `/buy <item_code>` - Purchase items with earned points
+- `/balance` - Check your current point balance
+- `/help` - Get command list and assistance
 
-- `POST /api/tasks?user_id={user_id}` - Create a new task
-- `GET /api/tasks/{task_id}` - Get a specific task
-- `PUT /api/tasks/{task_id}` - Update a task
-- `POST /api/tasks/{task_id}/complete?user_id={user_id}` - Mark a task as complete
+### Coming Soon
+- `/tasks` - View and manage your tasks
+- `/complete <task_id>` - Mark tasks as complete
+- `/streak` - View your habit streaks
+- `/settings` - Configure preferences
 
-### User Tasks
+## 📡 API Endpoints
 
-- `GET /api/users/{user_id}/tasks` - List all tasks for a user
+The REST API enables external integrations and custom clients.
 
-### Task Data Structure
+### Base URL
+```
+http://localhost:8080/api
+```
 
-When creating or updating tasks, use the following JSON structure:
+### Task Management
 
-```json
+#### Create Task
+```http
+POST /api/tasks?user_id={user_id}
+Content-Type: application/json
+
 {
   "chat_id": 123456789,
-  "title": "Example Task",
-  "description": "This is an example task",
+  "title": "Morning Meditation",
+  "description": "10 minutes of mindfulness",
   "category": "daily",
-  "difficulty": "medium",
+  "difficulty": "easy",
   "schedule_json": "{}",
-  "base_duration": 3600,
+  "base_duration": 600,
   "grace_period": 300,
   "cooldown": 0,
   "reward_curve_json": "{}",
   "streak_enabled": true,
   "status": "active",
-  "time_zone": "UTC"
+  "time_zone": "America/New_York"
 }
 ```
 
-## Architecture
+#### Get Task
+```http
+GET /api/tasks/{task_id}
+```
 
-The bot follows a clean architecture pattern with:
-- Domain layer containing entities and value objects
-- Use case layer with business logic
-- Infrastructure layer with database implementations
-- Ports and adapters for dependency inversion
+#### Update Task
+```http
+PUT /api/tasks/{task_id}
+Content-Type: application/json
 
-## License
+{
+  "title": "Updated Task Title",
+  "difficulty": "medium"
+}
+```
 
-This project is licensed under the MIT License.
+#### Complete Task
+```http
+POST /api/tasks/{task_id}/complete?user_id={user_id}
+```
+
+#### List User Tasks
+```http
+GET /api/users/{user_id}/tasks
+```
+
+### Response Format
+```json
+{
+  "data": { ... },
+  "error": null,
+  "timestamp": "2025-01-09T15:00:00Z"
+}
+```
+
+## 🏗️ Architecture
+
+The project implements Clean Architecture principles:
+
+```
+├── cmd/                    # Application entry points
+│   ├── bot/               # Telegram bot executable
+│   └── api/               # REST API server
+├── internal/              # Private application code
+│   ├── domain/            # Core business logic
+│   │   ├── entity/        # Domain entities
+│   │   └── valueobject/   # Value objects
+│   ├── usecase/           # Application use cases
+│   ├── infra/             # Infrastructure implementations
+│   │   ├── postgres/      # PostgreSQL repositories
+│   │   └── http/          # HTTP handlers
+│   └── ports/             # Interface definitions
+├── test/                  # Test files
+│   ├── acceptance/        # End-to-end tests
+│   └── fixtures/          # Test data builders
+└── scripts/               # Utility scripts
+```
+
+### Key Design Patterns
+- **Repository Pattern**: Abstract data access
+- **Dependency Injection**: Loose coupling
+- **Domain-Driven Design**: Rich domain models
+- **CQRS**: Separate read/write operations
+- **Event Sourcing**: Audit trail (planned)
+
+## 🔒 Security
+
+- **Data Encryption**: All sensitive data encrypted at rest
+- **TLS Communication**: Secure API endpoints
+- **Input Validation**: Comprehensive sanitization
+- **SQL Injection Prevention**: Parameterized queries
+- **Rate Limiting**: API abuse prevention
+- **Audit Logging**: Security event tracking
+
+## 🚀 Deployment
+
+### Production Deployment
+
+1. **Environment Setup**
+   ```bash
+   cp .env.example .env
+   # Edit .env with production values
+   ```
+
+2. **Deploy with Docker Compose**
+   ```bash
+   docker-compose -f docker-compose.prod.yml up -d
+   ```
+
+3. **Configure Monitoring**
+   - Set up Prometheus metrics collection
+   - Configure Grafana dashboards
+   - Enable alerting
+
+### Scaling Considerations
+- Horizontal scaling via Kubernetes
+- Database read replicas for performance
+- Redis caching layer
+- CDN for static assets
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Process
+1. Fork the repository
+2. Create a feature branch
+3. Write tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
+
+### Code Standards
+- Follow Go best practices
+- Maintain test coverage above 80%
+- Document all public APIs
+- Use meaningful commit messages
+
+## 📊 Project Status
+
+- ✅ Core bot functionality
+- ✅ Shop system
+- ✅ REST API
+- ✅ Database migrations
+- ✅ Docker support
+- 🚧 Task notifications
+- 🚧 Mobile apps
+- 📅 Analytics dashboard
+- 📅 Third-party integrations
+
+## 🆘 Support
+
+- **Documentation**: See our [comprehensive guides](USER_GUIDE.md)
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/your-repo/issues)
+- **Community**: Join our [Telegram group](https://t.me/ADHDGameBotCommunity)
+- **Email**: support@adhd-game-bot.com
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- The ADHD community for invaluable feedback
+- Contributors who've helped shape this project
+- Open source libraries that made this possible
+
+---
+
+**Built with ❤️ for the ADHD community**
